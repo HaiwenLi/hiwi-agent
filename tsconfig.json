@@ -14,10 +14,11 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
+    "jsx": "react-jsx",
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", "dist", "tests"]
 }
