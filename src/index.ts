@@ -33,3 +33,22 @@ export type {
   ModelInfo,
   ToolContext,
 } from "./types.js";
+
+// Memory
+export { MemoryFileStore, type MemoryEntry } from "./memory/file-store.js";
+export { Mem0Client, type Mem0SearchResult, type Mem0SdkClient } from "./memory/mem0-client.js";
+export { MemoryManager, type MergedMemoryResult, type RecallOptions } from "./memory/manager.js";
+export {
+  SessionStore,
+  type Session,
+  type SessionMessage,
+  type SessionSummary,
+} from "./memory/session.js";
+export {
+  ContextCompactor,
+  estimateTokens,
+  shouldCompact,
+  pruneToolOutputs,
+  type CompactOptions,
+  type CompactResult,
+} from "./memory/compaction.js";
