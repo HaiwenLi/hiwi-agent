@@ -1,0 +1,146 @@
+// ─── Message Types ────────────────────────────────────────────
+
+export interface ToolCall {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface Message {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string;
+  toolCallId?: string;
+  toolCalls?: ToolCall[];
+}
+
+export interface ToolResult {
+  toolCallId: string;
+  content: string;
+  isError: boolean;
+}
+
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+// ─── Model Adapter Types ──────────────────────────────────────
+
+export interface ModelCapabilities {
+  tools: boolean;
+  vision: boolean;
+  maxTokens: number;
+  contextWindow: number;
+}
+
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+export interface ChatOptions {
+  model?: string;
+  maxTokens?: number;
+  temperature?: number;
+  systemPrompt?: string;
+  tools?: ToolDefinition[];
+}
+
+export interface ChatResponse {
+  content: string;
+  toolCalls: ToolCall[];
+  finishReason: "stop" | "tool-calls" | "max-tokens";
+  usage: TokenUsage;
+}
+
+export type StreamChunk =
+  | { type: "text-delta"; text: string }
+  | { type: "reasoning-delta"; text: string }
+  | { type: "tool-call"; toolCall: ToolCall }
+  | { type: "finish"; finishReason: string; usage: TokenUsage };
+
+export interface ModelAdapter {
+  readonly id: string;
+  readonly provider: string;
+  readonly capabilities: ModelCapabilities;
+
+  chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse>;
+  stream(messages: Message[], options?: ChatOptions): AsyncIterable<StreamChunk>;
+}
+
+// ─── Tool System Types ────────────────────────────────────────
+
+export type ToolCapability = "ReadOnly" | "WriteFiles" | "ExecCode" | "Network";
+
+export interface Tool {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  capabilities: ToolCapability[];
+  execute(input: unknown, context: ToolContext): Promise<ToolResult>;
+}
+
+export interface ToolContext {
+  workingDirectory: string;
+  sessionId: string;
+}
+
+export type PermissionMode = "normal" | "auto" | "yolo";
+
+// ─── Agent Loop Types ─────────────────────────────────────────
+
+export type AgentLoopEventType =
+  | "text-delta"
+  | "reasoning-delta"
+  | "tool-call"
+  | "tool-result"
+  | "step-start"
+  | "step-finish"
+  | "compaction"
+  | "finish"
+  | "error";
+
+export interface AgentLoopEvent {
+  type: AgentLoopEventType;
+  iteration?: number;
+  text?: string;
+  toolName?: string;
+  toolCallId?: string;
+  toolInput?: unknown;
+  toolResult?: ToolResult;
+  finishReason?: "completed" | "max-loops" | "interrupted" | "error";
+  usage?: TokenUsage;
+}
+
+export interface AgentLoopConfig {
+  maxLoops: number;
+  maxOutputTokensPerTurn: number;
+  budgetTotal: number;
+  refundableTools: string[];
+  streaming: boolean;
+  interruptible: boolean;
+}
+
+// ─── Config Types ─────────────────────────────────────────────
+
+export interface ProviderConfig {
+  apiKey?: string;
+  baseUrl?: string;
+  models?: string[];
+}
+
+export interface AgentConfig {
+  activeProvider: string;
+  activeModel: string;
+  providers: Record<string, ProviderConfig>;
+  agent: AgentLoopConfig;
+}
+
+// ─── Model Info (for listing) ─────────────────────────────────
+
+export interface ModelInfo {
+  id: string;
+  provider: string;
+  capabilities: ModelCapabilities;
+}
