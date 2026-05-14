@@ -1,18 +1,18 @@
-import { loadConfig } from "../core/config.js";
+import os from "node:os";
+import path from "node:path";
 import { ProviderRegistry } from "../adapters/registry.js";
+import { loadConfig } from "../core/config.js";
 import { ToolRegistry } from "../core/tools.js";
+import { MCPServer } from "../mcp/server.js";
 import { MemoryFileStore } from "../memory/file-store.js";
-import { Mem0Client } from "../memory/mem0-client.js";
 import { MemoryManager } from "../memory/manager.js";
+import { Mem0Client } from "../memory/mem0-client.js";
 import { SessionStore } from "../memory/session.js";
+import { SkillExecutor } from "../skills/executor.js";
 import { SkillLoader } from "../skills/loader.js";
 import { SkillRegistry } from "../skills/registry.js";
-import { SkillExecutor } from "../skills/executor.js";
 import { CommandRegistry } from "./commands.js";
 import { REPL } from "./repl.js";
-import { MCPServer } from "../mcp/server.js";
-import path from "node:path";
-import os from "node:os";
 
 export interface CLIOptions {
   mcp?: boolean;
@@ -93,7 +93,9 @@ export async function main(options: CLIOptions = {}): Promise<void> {
     adapter: providerRegistry.getActiveAdapter(),
     loopConfig: config.agent,
     permissionMode,
-    setPermissionMode: (mode) => { permissionMode.value = mode; },
+    setPermissionMode: (mode) => {
+      permissionMode.value = mode;
+    },
     providerRegistry,
     memoryManager,
     sessionStore,

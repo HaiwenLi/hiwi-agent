@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createMCPTools, type MCPToolContext } from "@/mcp/tools.js";
+import { type MCPToolContext, createMCPTools } from "@/mcp/tools.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("MCP Tools", () => {
   let ctx: MCPToolContext;
@@ -10,7 +10,14 @@ describe("MCP Tools", () => {
         recall: vi.fn(async () => ({
           isOk: () => true,
           value: [
-            { name: "user-profile", content: "Alice is a developer", type: "user", score: 1, source: "file", description: "" },
+            {
+              name: "user-profile",
+              content: "Alice is a developer",
+              type: "user",
+              score: 1,
+              source: "file",
+              description: "",
+            },
           ],
         })),
         remember: vi.fn(async () => ({ isOk: () => true })),
@@ -18,13 +25,24 @@ describe("MCP Tools", () => {
       } as any,
       skillRegistry: {
         list: vi.fn(() => [
-          { name: "paper-search", trigger: "/paper-search", description: "Search papers", type: "domain", prompt: "Search", sourcePath: "" },
+          {
+            name: "paper-search",
+            trigger: "/paper-search",
+            description: "Search papers",
+            type: "domain",
+            prompt: "Search",
+            sourcePath: "",
+          },
         ]),
         getByTrigger: vi.fn(() => null),
       } as any,
       providerRegistry: {
         listModels: vi.fn(() => [
-          { id: "claude-sonnet-4-6", provider: "anthropic", capabilities: { tools: true, vision: true, maxTokens: 16384, contextWindow: 200000 } },
+          {
+            id: "claude-sonnet-4-6",
+            provider: "anthropic",
+            capabilities: { tools: true, vision: true, maxTokens: 16384, contextWindow: 200000 },
+          },
         ]),
         getActiveProvider: vi.fn(() => "anthropic"),
         getActiveModel: vi.fn(() => "claude-sonnet-4-6"),
@@ -63,8 +81,17 @@ describe("MCP Tools", () => {
   it("memory_add saves a memory", async () => {
     const tools = createMCPTools(ctx);
     const addTool = tools.find((t) => t.name === "memory_add")!;
-    const result = await addTool.handler({ name: "test", content: "Test memory", type: "knowledge" });
-    expect(ctx.memoryManager.remember).toHaveBeenCalledWith("test", "knowledge", "test", "Test memory");
+    const result = await addTool.handler({
+      name: "test",
+      content: "Test memory",
+      type: "knowledge",
+    });
+    expect(ctx.memoryManager.remember).toHaveBeenCalledWith(
+      "test",
+      "knowledge",
+      "test",
+      "Test memory",
+    );
     expect(result.content).toContain("Saved");
   });
 
@@ -84,8 +111,13 @@ describe("MCP Tools", () => {
 
   it("skill_execute runs a skill", async () => {
     ctx.skillRegistry.getByTrigger = vi.fn(() => ({
-      name: "paper-search", trigger: "/paper-search", description: "Search papers",
-      type: "domain", prompt: "Search", sourcePath: "", tools: [],
+      name: "paper-search",
+      trigger: "/paper-search",
+      description: "Search papers",
+      type: "domain",
+      prompt: "Search",
+      sourcePath: "",
+      tools: [],
     })) as any;
 
     const tools = createMCPTools(ctx);

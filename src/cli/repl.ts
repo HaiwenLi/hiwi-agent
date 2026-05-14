@@ -1,13 +1,13 @@
-import type { CommandRegistry, CommandContext } from "./commands.js";
-import type { SkillRegistry } from "../skills/registry.js";
-import { SkillExecutor } from "../skills/executor.js";
-import type { ToolRegistry } from "../core/tools.js";
-import type { AgentLoopConfig, Message, PermissionMode } from "../types.js";
 import type { ProviderRegistry } from "../adapters/registry.js";
+import { AgentLoop } from "../core/agent.js";
+import type { ToolRegistry } from "../core/tools.js";
 import type { MemoryManager } from "../memory/manager.js";
 import type { SessionStore } from "../memory/session.js";
-import { AgentLoop } from "../core/agent.js";
+import { SkillExecutor } from "../skills/executor.js";
 import type { Skill } from "../skills/loader.js";
+import type { SkillRegistry } from "../skills/registry.js";
+import type { AgentLoopConfig, Message, PermissionMode } from "../types.js";
+import type { CommandContext, CommandRegistry } from "./commands.js";
 
 export interface REPLDependencies {
   commandRegistry: CommandRegistry;

@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MCPServer } from "@/mcp/server.js";
 import type { MCPToolContext } from "@/mcp/tools.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the MCP SDK
 vi.mock("@modelcontextprotocol/sdk/server/index.js", () => ({

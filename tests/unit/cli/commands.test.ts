@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { CommandRegistry, type Command, type CommandContext } from "@/cli/commands.js";
+import { type Command, type CommandContext, CommandRegistry } from "@/cli/commands.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const makeContext = (): CommandContext => ({
   providerRegistry: {

@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { renderApp, type AppProps } from "@/cli/app.js";
+import { type AppProps, renderApp } from "@/cli/app.js";
+import { describe, expect, it } from "vitest";
 
 describe("App (TUI)", () => {
   it("exports a renderApp function", () => {

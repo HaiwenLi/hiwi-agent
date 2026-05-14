@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { REPL, type REPLDependencies } from "@/cli/repl.js";
 import { MockAdapter } from "@/adapters/mock.js";
 import { CommandRegistry } from "@/cli/commands.js";
-import { SkillRegistry } from "@/skills/registry.js";
+import { REPL, type REPLDependencies } from "@/cli/repl.js";
 import { ToolRegistry } from "@/core/tools.js";
+import { SkillRegistry } from "@/skills/registry.js";
 import type { AgentLoopConfig } from "@/types.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const LOOP_CONFIG: AgentLoopConfig = {
   maxLoops: 50,
@@ -106,9 +106,7 @@ describe("REPL", () => {
   });
 
   it("creates a new session on first chat", async () => {
-    deps.adapter = new MockAdapter([
-      { content: "Hi", toolCalls: [], finishReason: "stop" },
-    ]);
+    deps.adapter = new MockAdapter([{ content: "Hi", toolCalls: [], finishReason: "stop" }]);
     deps.providerRegistry.getActiveAdapter = () => deps.adapter;
 
     const repl = new REPL(deps);

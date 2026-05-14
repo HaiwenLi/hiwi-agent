@@ -1,6 +1,6 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { createMCPTools, type MCPToolContext } from "./tools.js";
+import { type MCPToolContext, createMCPTools } from "./tools.js";
 
 export interface MCPServerOptions {
   transport?: "stdio" | "sse";
@@ -26,44 +26,43 @@ export class MCPServer {
   }
 
   private setupHandlers(): void {
-    this.server.setRequestHandler(
-      { method: "tools/list" } as any,
-      async () => ({
-        tools: this.tools.map((t) => ({
-          name: t.name,
-          description: t.description,
-          inputSchema: t.inputSchema,
-        })),
-      }),
-    );
+    this.server.setRequestHandler({ method: "tools/list" } as any, async () => ({
+      tools: this.tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        inputSchema: t.inputSchema,
+      })),
+    }));
 
-    this.server.setRequestHandler(
-      { method: "tools/call" } as any,
-      async (request: any) => {
-        const toolName = request.params.name;
-        const toolArgs = request.params.arguments ?? {};
+    this.server.setRequestHandler({ method: "tools/call" } as any, async (request: any) => {
+      const toolName = request.params.name;
+      const toolArgs = request.params.arguments ?? {};
 
-        const tool = this.tools.find((t) => t.name === toolName);
-        if (!tool) {
-          return {
-            content: [{ type: "text", text: `Unknown tool: ${toolName}` }],
-            isError: true,
-          };
-        }
+      const tool = this.tools.find((t) => t.name === toolName);
+      if (!tool) {
+        return {
+          content: [{ type: "text", text: `Unknown tool: ${toolName}` }],
+          isError: true,
+        };
+      }
 
-        try {
-          const result = await tool.handler(toolArgs);
-          return {
-            content: [{ type: "text", text: result.content }],
-          };
-        } catch (error) {
-          return {
-            content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
-            isError: true,
-          };
-        }
-      },
-    );
+      try {
+        const result = await tool.handler(toolArgs);
+        return {
+          content: [{ type: "text", text: result.content }],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    });
   }
 
   async start(): Promise<void> {

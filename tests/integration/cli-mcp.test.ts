@@ -1,15 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { CommandRegistry } from "@/cli/commands.js";
+import { ToolRegistry } from "@/core/tools.js";
+import { createMCPTools } from "@/mcp/tools.js";
+import { MemoryFileStore } from "@/memory/file-store.js";
+import { MemoryManager } from "@/memory/manager.js";
+import { Mem0Client } from "@/memory/mem0-client.js";
 import { SkillLoader } from "@/skills/loader.js";
 import { SkillRegistry } from "@/skills/registry.js";
-import { ToolRegistry } from "@/core/tools.js";
-import { MemoryFileStore } from "@/memory/file-store.js";
-import { Mem0Client } from "@/memory/mem0-client.js";
-import { MemoryManager } from "@/memory/manager.js";
-import { createMCPTools } from "@/mcp/tools.js";
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import os from "node:os";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("Integration: CLI + MCP", () => {
   const tmpDir = path.join(os.tmpdir(), "hiwi-cli-integration");

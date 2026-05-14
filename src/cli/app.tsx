@@ -1,5 +1,5 @@
+import { Box, Text, render, useApp, useInput } from "ink";
 import React, { useState } from "react";
-import { render, Box, Text, useInput, useApp } from "ink";
 
 export interface AppProps {
   onInput: (text: string) => Promise<void>;
@@ -49,11 +49,16 @@ function App({ onInput }: AppProps) {
 
   const roleColor = (role: string) => {
     switch (role) {
-      case "user": return "cyan";
-      case "assistant": return "green";
-      case "tool": return "yellow";
-      case "error": return "red";
-      default: return "white";
+      case "user":
+        return "cyan";
+      case "assistant":
+        return "green";
+      case "tool":
+        return "yellow";
+      case "error":
+        return "red";
+      default:
+        return "white";
     }
   };
 

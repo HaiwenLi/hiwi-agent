@@ -45,3 +45,29 @@ Deviations from plan that were necessary during implementation.
 **Reason:** With default `preserveRecent=2`, a single tool message is always in the "last 2" and gets preserved. The test needs `preserveRecent=0` to actually exercise truncation.
 
 **Files affected:** `tests/unit/memory/file-store.test.ts`, `tests/unit/memory/compaction.test.ts`
+
+---
+
+## Sprint 4: CLI + MCP
+
+### 1. ProviderRegistry mock method names: setActiveProvider/setActiveModel → setProvider/setModel
+
+**Plan:** Test mocks define `setActiveProvider` and `setActiveModel` on the provider registry mock. Test assertions check these methods.
+
+**Actual:** Changed mock and assertions to `setProvider` and `setModel`.
+
+**Reason:** The real `ProviderRegistry` (from Sprint 1) exposes `setProvider()` and `setModel()`, not `setActiveProvider()`/`setActiveModel()`. The plan's test mock didn't match the actual API. The implementation code in `commands.ts` correctly called `ctx.providerRegistry.setModel(args)` and `ctx.providerRegistry.setProvider(args)`, but the mock would never receive those calls.
+
+**Files affected:** `tests/unit/cli/commands.test.ts`
+
+---
+
+### 2. SkillExecutor import: type-only → value import in REPL
+
+**Plan:** `import type { SkillExecutor } from "../skills/executor.js";` in `src/cli/repl.ts`.
+
+**Actual:** Changed to `import { SkillExecutor } from "../skills/executor.js";` (value import, not type-only).
+
+**Reason:** The REPL's `executeSkill` method instantiates `new SkillExecutor(this.deps.toolRegistry)` at runtime. A `type`-only import gets erased at compile time, causing `ReferenceError: SkillExecutor is not defined` when the skill trigger path executes. This only surfaced at test runtime since the plan's code listed SkillExecutor as a type import.
+
+**Files affected:** `src/cli/repl.ts`

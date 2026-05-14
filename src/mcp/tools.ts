@@ -1,7 +1,7 @@
-import type { MemoryManager } from "../memory/manager.js";
-import type { SkillRegistry } from "../skills/registry.js";
 import type { ProviderRegistry } from "../adapters/registry.js";
+import type { MemoryManager } from "../memory/manager.js";
 import type { SkillExecutor } from "../skills/executor.js";
+import type { SkillRegistry } from "../skills/registry.js";
 
 export interface MCPToolContext {
   memoryManager: MemoryManager;
