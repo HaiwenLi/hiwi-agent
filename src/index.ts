@@ -52,3 +52,8 @@ export {
   type CompactOptions,
   type CompactResult,
 } from "./memory/compaction.js";
+
+// Skills
+export { SkillLoader, type Skill } from "./skills/loader.js";
+export { SkillRegistry, type ListOptions as SkillListOptions } from "./skills/registry.js";
+export { SkillExecutor, type SkillExecuteOptions, type SkillExecuteResult } from "./skills/executor.js";
