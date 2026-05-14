@@ -1,0 +1,39 @@
+{
+  "activeProvider": "anthropic",
+  "activeModel": "claude-sonnet-4-6",
+  "providers": {
+    "anthropic": {
+      "apiKey": "env:ANTHROPIC_API_KEY"
+    },
+    "openai": {
+      "apiKey": "env:OPENAI_API_KEY"
+    },
+    "deepseek": {
+      "apiKey": "env:DEEPSEEK_API_KEY",
+      "baseUrl": "https://api.deepseek.com"
+    },
+    "ollama": {
+      "baseUrl": "http://localhost:11434"
+    },
+    "zhipu": {
+      "apiKey": "env:ZHIPU_API_KEY",
+      "baseUrl": "https://open.bigmodel.cn/api/paas/v4"
+    },
+    "kimi": {
+      "apiKey": "env:MOONSHOT_API_KEY",
+      "baseUrl": "https://api.moonshot.cn/v1"
+    },
+    "minimax": {
+      "apiKey": "env:MINIMAX_API_KEY",
+      "baseUrl": "https://api.minimax.chat/v1"
+    }
+  },
+  "agent": {
+    "maxLoops": 50,
+    "maxOutputTokensPerTurn": 4096,
+    "budgetTotal": 50,
+    "refundableTools": ["read_file", "glob", "grep", "web_search"],
+    "streaming": true,
+    "interruptible": true
+  }
+}
