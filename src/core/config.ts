@@ -1,8 +1,8 @@
-import { z } from "zod";
-import { err, ok, type Result } from "neverthrow";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { AgentConfig, ProviderConfig, AgentLoopConfig } from "../types.js";
+import { type Result, err, ok } from "neverthrow";
+import { z } from "zod";
+import type { AgentConfig, AgentLoopConfig, ProviderConfig } from "../types.js";
 
 const ProviderConfigSchema = z.object({
   apiKey: z.string().optional(),
@@ -30,14 +30,16 @@ const AgentConfigPartialSchema = z.object({
   activeProvider: z.string().optional(),
   activeModel: z.string().optional(),
   providers: z.record(z.string(), ProviderConfigSchema).optional(),
-  agent: z.object({
-    maxLoops: z.number().optional(),
-    maxOutputTokensPerTurn: z.number().optional(),
-    budgetTotal: z.number().optional(),
-    refundableTools: z.array(z.string()).optional(),
-    streaming: z.boolean().optional(),
-    interruptible: z.boolean().optional(),
-  }).optional(),
+  agent: z
+    .object({
+      maxLoops: z.number().optional(),
+      maxOutputTokensPerTurn: z.number().optional(),
+      budgetTotal: z.number().optional(),
+      refundableTools: z.array(z.string()).optional(),
+      streaming: z.boolean().optional(),
+      interruptible: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 const DEFAULT_CONFIG: AgentConfig = {
@@ -75,10 +77,16 @@ export function resolveConfig(config: AgentConfig): AgentConfig {
 
 function deepMerge(base: AgentConfig, override: Record<string, unknown>): AgentConfig {
   const result = { ...base };
-  if (override.activeProvider !== undefined) result.activeProvider = override.activeProvider as string;
+  if (override.activeProvider !== undefined)
+    result.activeProvider = override.activeProvider as string;
   if (override.activeModel !== undefined) result.activeModel = override.activeModel as string;
-  if (override.providers !== undefined) result.providers = { ...base.providers, ...(override.providers as Record<string, ProviderConfig>) };
-  if (override.agent !== undefined) result.agent = { ...base.agent, ...(override.agent as Partial<AgentLoopConfig>) };
+  if (override.providers !== undefined)
+    result.providers = {
+      ...base.providers,
+      ...(override.providers as Record<string, ProviderConfig>),
+    };
+  if (override.agent !== undefined)
+    result.agent = { ...base.agent, ...(override.agent as Partial<AgentLoopConfig>) };
   return result;
 }
 

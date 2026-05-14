@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockCreate = vi.fn();
 
@@ -43,10 +43,12 @@ describe("OpenAICompatAdapter", () => {
 
   it("converts and returns text response", async () => {
     mockCreate.mockResolvedValue({
-      choices: [{
-        message: { role: "assistant", content: "Hello!" },
-        finish_reason: "stop",
-      }],
+      choices: [
+        {
+          message: { role: "assistant", content: "Hello!" },
+          finish_reason: "stop",
+        },
+      ],
       usage: { prompt_tokens: 10, completion_tokens: 5 },
     });
 
@@ -60,18 +62,22 @@ describe("OpenAICompatAdapter", () => {
 
   it("handles tool_calls response", async () => {
     mockCreate.mockResolvedValue({
-      choices: [{
-        message: {
-          role: "assistant",
-          content: null,
-          tool_calls: [{
-            id: "c1",
-            type: "function",
-            function: { name: "read_file", arguments: '{"path":"/tmp"}' },
-          }],
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: null,
+            tool_calls: [
+              {
+                id: "c1",
+                type: "function",
+                function: { name: "read_file", arguments: '{"path":"/tmp"}' },
+              },
+            ],
+          },
+          finish_reason: "tool_calls",
         },
-        finish_reason: "tool_calls",
-      }],
+      ],
       usage: { prompt_tokens: 15, completion_tokens: 20 },
     });
 
@@ -89,10 +95,12 @@ describe("OpenAICompatAdapter", () => {
 
   it("converts tool result messages correctly", async () => {
     mockCreate.mockResolvedValue({
-      choices: [{
-        message: { role: "assistant", content: "Done" },
-        finish_reason: "stop",
-      }],
+      choices: [
+        {
+          message: { role: "assistant", content: "Done" },
+          finish_reason: "stop",
+        },
+      ],
       usage: { prompt_tokens: 30, completion_tokens: 5 },
     });
 
@@ -100,7 +108,8 @@ describe("OpenAICompatAdapter", () => {
     await adapter.chat([
       { role: "user", content: "read" },
       {
-        role: "assistant", content: "",
+        role: "assistant",
+        content: "",
         toolCalls: [{ id: "c1", name: "read_file", input: { path: "/tmp" } }],
       },
       { role: "tool", content: "file content", toolCallId: "c1" },
@@ -113,10 +122,18 @@ describe("OpenAICompatAdapter", () => {
   });
 
   it("uses model-specific capabilities", () => {
-    const gpt4 = new OpenAICompatAdapter({ provider: "openai", apiKey: "sk-test", model: "gpt-4o" });
+    const gpt4 = new OpenAICompatAdapter({
+      provider: "openai",
+      apiKey: "sk-test",
+      model: "gpt-4o",
+    });
     expect(gpt4.capabilities.contextWindow).toBe(128_000);
 
-    const deepseek = new OpenAICompatAdapter({ provider: "deepseek", apiKey: "sk-test", model: "deepseek-r1" });
+    const deepseek = new OpenAICompatAdapter({
+      provider: "deepseek",
+      apiKey: "sk-test",
+      model: "deepseek-r1",
+    });
     expect(deepseek.capabilities.contextWindow).toBe(128_000);
   });
 });

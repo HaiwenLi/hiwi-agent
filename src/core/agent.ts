@@ -1,11 +1,11 @@
 import type {
-  ModelAdapter,
-  ToolResult,
-  Message,
   AgentLoopConfig,
   AgentLoopEvent,
+  Message,
+  ModelAdapter,
   PermissionMode,
   ToolContext,
+  ToolResult,
 } from "../types.js";
 import type { ToolRegistry } from "./tools.js";
 
@@ -54,24 +54,20 @@ function extractFilePaths(input: Record<string, unknown>): string[] {
   if (typeof input.path === "string") paths.push(input.path);
   if (typeof input.file === "string") paths.push(input.file);
   if (typeof input.directory === "string") paths.push(input.directory);
-  if (Array.isArray(input.paths)) paths.push(...input.paths.filter((p): p is string => typeof p === "string"));
+  if (Array.isArray(input.paths))
+    paths.push(...input.paths.filter((p): p is string => typeof p === "string"));
   return paths;
 }
 
-function shouldParallelize(
-  calls: ToolCallInfo[],
-  registry: ToolRegistry,
-): ExecutionMode {
+function shouldParallelize(calls: ToolCallInfo[], registry: ToolRegistry): ExecutionMode {
   if (calls.length <= 1) return "serial";
 
   const tools = calls.map((c) => registry.get(c.name));
-  const anyInteractive = tools.some((t) =>
-    t?.capabilities.includes("ExecCode"),
-  );
+  const anyInteractive = tools.some((t) => t?.capabilities.includes("ExecCode"));
   if (anyInteractive) return "serial";
 
-  const allReadOnly = tools.every((t) =>
-    t?.capabilities.includes("ReadOnly") && !t?.capabilities.includes("WriteFiles"),
+  const allReadOnly = tools.every(
+    (t) => t?.capabilities.includes("ReadOnly") && !t?.capabilities.includes("WriteFiles"),
   );
   if (allReadOnly) return "parallel";
 
@@ -111,7 +107,7 @@ export class AgentLoop {
       sessionId: `session-${Date.now()}`,
     };
 
-    let currentMessages = [...messages];
+    const currentMessages = [...messages];
     let iteration = 0;
     let emptyResponseCount = 0;
 
@@ -131,7 +127,10 @@ export class AgentLoop {
           if (emptyResponseCount <= 1) {
             currentMessages.push(
               { role: "assistant", content: "" },
-              { role: "user", content: "You gave an empty response. Please provide a helpful answer." },
+              {
+                role: "user",
+                content: "You gave an empty response. Please provide a helpful answer.",
+              },
             );
             yield { type: "step-finish", iteration };
             iteration++;
@@ -173,7 +172,13 @@ export class AgentLoop {
         const tc = response.toolCalls[i];
         const result = results[i];
 
-        yield { type: "tool-call", toolName: tc.name, toolCallId: tc.id, toolInput: tc.input, iteration };
+        yield {
+          type: "tool-call",
+          toolName: tc.name,
+          toolCallId: tc.id,
+          toolInput: tc.input,
+          iteration,
+        };
         yield { type: "tool-result", toolResult: result, toolCallId: tc.id, iteration };
 
         currentMessages.push({

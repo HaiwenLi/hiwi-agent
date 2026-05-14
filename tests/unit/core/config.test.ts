@@ -1,16 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { loadConfig, resolveConfig, resolveApiKey } from "@/core/config.js";
-import type { AgentConfig } from "@/types.js";
 import { promises as fs } from "node:fs";
-import path from "node:path";
 import os from "node:os";
+import path from "node:path";
+import { loadConfig, resolveApiKey, resolveConfig } from "@/core/config.js";
+import type { AgentConfig } from "@/types.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 describe("Config Module", () => {
   describe("resolveApiKey", () => {
     it("resolves env: prefix to environment variable", () => {
       process.env.TEST_API_KEY = "sk-test-123";
       expect(resolveApiKey("env:TEST_API_KEY")).toBe("sk-test-123");
-      delete process.env.TEST_API_KEY;
+      Reflect.deleteProperty(process.env, "TEST_API_KEY");
     });
 
     it("returns raw value if no env: prefix", () => {
@@ -18,7 +18,7 @@ describe("Config Module", () => {
     });
 
     it("returns undefined for missing env var", () => {
-      delete process.env.NONEXISTENT_KEY;
+      Reflect.deleteProperty(process.env, "NONEXISTENT_KEY");
       expect(resolveApiKey("env:NONEXISTENT_KEY")).toBeUndefined();
     });
 
@@ -49,7 +49,7 @@ describe("Config Module", () => {
       const resolved = resolveConfig(config);
       expect(resolved.providers.anthropic?.apiKey).toBe("resolved-key");
       expect(resolved.providers.openai?.apiKey).toBe("sk-direct");
-      delete process.env.MY_TEST_KEY;
+      Reflect.deleteProperty(process.env, "MY_TEST_KEY");
     });
   });
 
@@ -75,10 +75,7 @@ describe("Config Module", () => {
 
     it("loads global config and merges with defaults", async () => {
       const globalConfig = { activeProvider: "openai", activeModel: "gpt-4" };
-      await fs.writeFile(
-        path.join(tmpDir, "config.json"),
-        JSON.stringify(globalConfig),
-      );
+      await fs.writeFile(path.join(tmpDir, "config.json"), JSON.stringify(globalConfig));
       const result = await loadConfig(tmpDir);
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
@@ -102,10 +99,7 @@ describe("Config Module", () => {
         JSON.stringify({ activeModel: "gpt-4o" }),
       );
 
-      const result = await loadConfig(
-        path.join(tmpDir, "global"),
-        path.join(tmpDir, "project"),
-      );
+      const result = await loadConfig(path.join(tmpDir, "global"), path.join(tmpDir, "project"));
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
         expect(result.value.activeProvider).toBe("openai"); // from global

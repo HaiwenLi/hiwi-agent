@@ -1,7 +1,7 @@
-import type { ModelAdapter, AgentConfig, ModelInfo, ProviderConfig } from "../types.js";
+import type { AgentConfig, ModelAdapter, ModelInfo, ProviderConfig } from "../types.js";
 import { AnthropicAdapter } from "./anthropic.js";
-import { OpenAICompatAdapter } from "./openai-compat.js";
 import { OllamaAdapter } from "./ollama.js";
+import { OpenAICompatAdapter } from "./openai-compat.js";
 
 export class ProviderRegistry {
   private adapters = new Map<string, ModelAdapter>();

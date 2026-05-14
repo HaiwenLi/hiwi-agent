@@ -1,9 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
-import { ProviderRegistry } from "@/adapters/registry.js";
-import { ToolRegistry } from "@/core/tools.js";
-import { AgentLoop } from "@/core/agent.js";
 import { MockAdapter } from "@/adapters/mock.js";
+import { ProviderRegistry } from "@/adapters/registry.js";
+import { AgentLoop } from "@/core/agent.js";
+import { ToolRegistry } from "@/core/tools.js";
 import type { AgentConfig, Tool, ToolContext } from "@/types.js";
+import { describe, expect, it, vi } from "vitest";
 
 const TEST_CONFIG: AgentConfig = {
   activeProvider: "mock",
@@ -65,14 +65,18 @@ describe("Integration: Agent Loop E2E", () => {
     );
 
     const events = [];
-    for await (const event of loop.run([{ role: "user", content: "Read /tmp/hello.txt and summarize" }])) {
+    for await (const event of loop.run([
+      { role: "user", content: "Read /tmp/hello.txt and summarize" },
+    ])) {
       events.push(event);
     }
 
     expect(events.some((e) => e.type === "step-start")).toBe(true);
     expect(events.some((e) => e.type === "tool-call" && e.toolName === "read_file")).toBe(true);
     expect(events.some((e) => e.type === "tool-result")).toBe(true);
-    expect(events.some((e) => e.type === "text-delta" && e.text?.includes("hello world"))).toBe(true);
+    expect(events.some((e) => e.type === "text-delta" && e.text?.includes("hello world"))).toBe(
+      true,
+    );
     expect(events.find((e) => e.type === "finish")?.finishReason).toBe("completed");
 
     expect(readFile.execute).toHaveBeenCalledTimes(1);
@@ -133,7 +137,7 @@ describe("Integration: Agent Loop E2E", () => {
       [
         {
           content: "",
-          toolCalls: [{ id: `c1`, name: "bash", input: { command: "echo hi" } }],
+          toolCalls: [{ id: "c1", name: "bash", input: { command: "echo hi" } }],
           finishReason: "tool-calls",
         },
       ],
@@ -155,12 +159,7 @@ describe("Integration: Agent Loop E2E", () => {
     });
 
     const lowBudgetConfig = { ...TEST_CONFIG.agent, budgetTotal: 3, maxLoops: 50 };
-    const loop = new AgentLoop(
-      registry.getActiveAdapter(),
-      toolRegistry,
-      "yolo",
-      lowBudgetConfig,
-    );
+    const loop = new AgentLoop(registry.getActiveAdapter(), toolRegistry, "yolo", lowBudgetConfig);
 
     const events = [];
     for await (const event of loop.run([{ role: "user", content: "loop" }])) {

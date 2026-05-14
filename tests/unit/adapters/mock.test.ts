@@ -1,11 +1,9 @@
-import { describe, it, expect } from "vitest";
 import { MockAdapter, type MockResponse } from "@/adapters/mock.js";
+import { describe, expect, it } from "vitest";
 
 describe("MockAdapter", () => {
   it("returns predefined text response", async () => {
-    const mock = new MockAdapter([
-      { content: "Hello!", toolCalls: [], finishReason: "stop" },
-    ]);
+    const mock = new MockAdapter([{ content: "Hello!", toolCalls: [], finishReason: "stop" }]);
     const resp = await mock.chat([{ role: "user", content: "hi" }]);
     expect(resp.content).toBe("Hello!");
     expect(resp.finishReason).toBe("stop");
@@ -39,9 +37,7 @@ describe("MockAdapter", () => {
   });
 
   it("streams text as text-delta chunks", async () => {
-    const mock = new MockAdapter([
-      { content: "Hello World", toolCalls: [], finishReason: "stop" },
-    ]);
+    const mock = new MockAdapter([{ content: "Hello World", toolCalls: [], finishReason: "stop" }]);
     const chunks: string[] = [];
     for await (const chunk of mock.stream([{ role: "user", content: "hi" }])) {
       if (chunk.type === "text-delta" && chunk.text) {
@@ -63,9 +59,7 @@ describe("MockAdapter", () => {
   });
 
   it("tracks usage (incrementing token counts)", async () => {
-    const mock = new MockAdapter([
-      { content: "Hi", toolCalls: [], finishReason: "stop" },
-    ]);
+    const mock = new MockAdapter([{ content: "Hi", toolCalls: [], finishReason: "stop" }]);
     const resp = await mock.chat([{ role: "user", content: "hello" }]);
     expect(resp.usage.inputTokens).toBeGreaterThan(0);
     expect(resp.usage.outputTokens).toBeGreaterThan(0);

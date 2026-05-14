@@ -1,4 +1,11 @@
-import type { Tool, ToolContext, ToolDefinition, PermissionMode, ToolResult, ToolCapability } from "../types.js";
+import type {
+  PermissionMode,
+  Tool,
+  ToolCapability,
+  ToolContext,
+  ToolDefinition,
+  ToolResult,
+} from "../types.js";
 
 export interface ToolRegistryOptions {
   onPermission?: (toolName: string, capability: ToolCapability) => Promise<boolean>;

@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { AgentLoop, IterationBudget } from "@/core/agent.js";
 import { MockAdapter } from "@/adapters/mock.js";
+import { AgentLoop, IterationBudget } from "@/core/agent.js";
 import { ToolRegistry } from "@/core/tools.js";
-import type { AgentLoopConfig, Tool, ToolContext, PermissionMode } from "@/types.js";
+import type { AgentLoopConfig, PermissionMode, Tool, ToolContext } from "@/types.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const DEFAULT_CONFIG: AgentLoopConfig = {
   maxLoops: 50,
@@ -65,9 +65,7 @@ describe("AgentLoop", () => {
   });
 
   it("completes a simple text-only conversation", async () => {
-    const adapter = new MockAdapter([
-      { content: "Hello!", toolCalls: [], finishReason: "stop" },
-    ]);
+    const adapter = new MockAdapter([{ content: "Hello!", toolCalls: [], finishReason: "stop" }]);
     const loop = new AgentLoop(adapter, toolRegistry, "normal", DEFAULT_CONFIG);
 
     const events = [];
@@ -214,9 +212,7 @@ describe("AgentLoop", () => {
   });
 
   it("emits step-start and step-finish per iteration", async () => {
-    const adapter = new MockAdapter([
-      { content: "Hi", toolCalls: [], finishReason: "stop" },
-    ]);
+    const adapter = new MockAdapter([{ content: "Hi", toolCalls: [], finishReason: "stop" }]);
 
     const loop = new AgentLoop(adapter, toolRegistry, "normal", DEFAULT_CONFIG);
     const events = [];

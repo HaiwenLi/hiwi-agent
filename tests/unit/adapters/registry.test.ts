@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { ProviderRegistry } from "@/adapters/registry.js";
 import { MockAdapter } from "@/adapters/mock.js";
+import { ProviderRegistry } from "@/adapters/registry.js";
 import type { AgentConfig } from "@/types.js";
+import { beforeEach, describe, expect, it } from "vitest";
 
 const TEST_CONFIG: AgentConfig = {
   activeProvider: "anthropic",
@@ -75,7 +75,7 @@ describe("ProviderRegistry", () => {
     };
     const reg = new ProviderRegistry(config);
     expect(() => reg.createAdapter("anthropic")).not.toThrow();
-    delete process.env.TEST_ANTHROPIC_KEY;
+    Reflect.deleteProperty(process.env, "TEST_ANTHROPIC_KEY");
   });
 
   it("returns the active provider and model names", () => {

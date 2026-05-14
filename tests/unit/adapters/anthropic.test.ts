@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockCreate = vi.fn();
 const mockStream = vi.fn();
@@ -29,9 +29,7 @@ describe("AnthropicAdapter", () => {
       usage: { input_tokens: 10, output_tokens: 5 },
     });
 
-    const resp = await adapter.chat([
-      { role: "user", content: "hi" },
-    ]);
+    const resp = await adapter.chat([{ role: "user", content: "hi" }]);
 
     expect(resp.content).toBe("Hello!");
     expect(resp.finishReason).toBe("stop");
@@ -68,7 +66,11 @@ describe("AnthropicAdapter", () => {
 
     const resp = await adapter.chat([
       { role: "user", content: "read" },
-      { role: "assistant", content: "", toolCalls: [{ id: "c1", name: "read_file", input: { path: "/tmp" } }] },
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [{ id: "c1", name: "read_file", input: { path: "/tmp" } }],
+      },
       { role: "tool", content: "file content", toolCallId: "c1" },
     ]);
 

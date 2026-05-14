@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { OllamaAdapter } from "@/adapters/ollama.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("OllamaAdapter", () => {
   let adapter: OllamaAdapter;
@@ -40,9 +40,11 @@ describe("OllamaAdapter", () => {
       message: {
         role: "assistant",
         content: "",
-        tool_calls: [{
-          function: { name: "read_file", arguments: { path: "/tmp" } },
-        }],
+        tool_calls: [
+          {
+            function: { name: "read_file", arguments: { path: "/tmp" } },
+          },
+        ],
       },
       done: true,
       prompt_eval_count: 15,
@@ -68,8 +70,6 @@ describe("OllamaAdapter", () => {
 
   it("throws on connection error with descriptive message", async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error("Connection refused"));
-    await expect(
-      adapter.chat([{ role: "user", content: "hi" }]),
-    ).rejects.toThrow("Ollama");
+    await expect(adapter.chat([{ role: "user", content: "hi" }])).rejects.toThrow("Ollama");
   });
 });

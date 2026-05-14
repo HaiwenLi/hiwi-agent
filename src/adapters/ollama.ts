@@ -1,9 +1,9 @@
 import type {
-  ModelAdapter,
-  ModelCapabilities,
-  Message,
   ChatOptions,
   ChatResponse,
+  Message,
+  ModelAdapter,
+  ModelCapabilities,
   StreamChunk,
   ToolDefinition,
 } from "../types.js";
@@ -86,9 +86,7 @@ export class OllamaAdapter implements ModelAdapter {
         },
       };
     } catch (error) {
-      throw new Error(
-        `Ollama error: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw new Error(`Ollama error: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

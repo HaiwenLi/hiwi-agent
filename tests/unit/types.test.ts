@@ -1,22 +1,22 @@
-import { describe, it, expectTypeOf, expect } from "vitest";
 import type {
-  Message,
-  ToolCall,
-  ToolResult,
-  ChatResponse,
-  StreamChunk,
-  TokenUsage,
-  ModelCapabilities,
-  ChatOptions,
-  ToolDefinition,
-  ModelAdapter,
-  Tool,
-  ToolCapability,
-  PermissionMode,
+  AgentLoopConfig,
   AgentLoopEvent,
   AgentLoopEventType,
-  AgentLoopConfig,
+  ChatOptions,
+  ChatResponse,
+  Message,
+  ModelAdapter,
+  ModelCapabilities,
+  PermissionMode,
+  StreamChunk,
+  TokenUsage,
+  Tool,
+  ToolCall,
+  ToolCapability,
+  ToolDefinition,
+  ToolResult,
 } from "@/types.js";
+import { describe, expect, expectTypeOf, it } from "vitest";
 
 describe("Shared Types", () => {
   it("Message has required fields", () => {

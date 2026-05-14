@@ -1,10 +1,10 @@
 import OpenAI from "openai";
 import type {
-  ModelAdapter,
-  ModelCapabilities,
-  Message,
   ChatOptions,
   ChatResponse,
+  Message,
+  ModelAdapter,
+  ModelCapabilities,
   StreamChunk,
   ToolDefinition,
 } from "../types.js";

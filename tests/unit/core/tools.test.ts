@@ -1,17 +1,19 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
 import { ToolRegistry } from "@/core/tools.js";
-import type { Tool, ToolContext, PermissionMode } from "@/types.js";
+import type { PermissionMode, Tool, ToolContext } from "@/types.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const makeTool = (overrides: Partial<Tool> = {}): Tool => ({
   name: overrides.name ?? "test_tool",
   description: overrides.description ?? "A test tool",
   inputSchema: { type: "object" },
   capabilities: overrides.capabilities ?? ["ReadOnly"],
-  execute: overrides.execute ?? vi.fn(async () => ({
-    toolCallId: "c1",
-    content: "ok",
-    isError: false,
-  })),
+  execute:
+    overrides.execute ??
+    vi.fn(async () => ({
+      toolCallId: "c1",
+      content: "ok",
+      isError: false,
+    })),
 });
 
 const ctx: ToolContext = { workingDirectory: "/tmp", sessionId: "s1" };
@@ -121,11 +123,13 @@ describe("ToolRegistry", () => {
   });
 
   it("converts registered tools to ToolDefinition format for adapters", () => {
-    registry.register(makeTool({
-      name: "read_file",
-      description: "Read a file",
-      inputSchema: { type: "object", properties: { path: { type: "string" } } },
-    }));
+    registry.register(
+      makeTool({
+        name: "read_file",
+        description: "Read a file",
+        inputSchema: { type: "object", properties: { path: { type: "string" } } },
+      }),
+    );
     const defs = registry.toToolDefinitions();
     expect(defs).toHaveLength(1);
     expect(defs[0].name).toBe("read_file");
