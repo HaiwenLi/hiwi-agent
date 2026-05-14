@@ -61,3 +61,13 @@ export {
   type SkillExecuteOptions,
   type SkillExecuteResult,
 } from "./skills/executor.js";
+
+// CLI
+export { CommandRegistry, type Command, type CommandContext } from "./cli/commands.js";
+export { REPL, type REPLDependencies } from "./cli/repl.js";
+export { renderApp, type AppProps } from "./cli/app.js";
+export { main } from "./cli/index.js";
+
+// MCP
+export { MCPServer, type MCPServerOptions } from "./mcp/server.js";
+export { createMCPTools, type MCPTool, type MCPToolContext } from "./mcp/tools.js";
