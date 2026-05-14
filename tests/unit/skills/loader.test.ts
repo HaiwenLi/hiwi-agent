@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { SkillLoader } from "@/skills/loader.js";
 import { promises as fs } from "node:fs";
-import path from "node:path";
 import os from "node:os";
+import path from "node:path";
+import { SkillLoader } from "@/skills/loader.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 describe("SkillLoader", () => {
   const tmpDir = path.join(os.tmpdir(), "hiwi-skill-test");
@@ -35,14 +35,19 @@ describe("SkillLoader", () => {
   }
 
   it("discovers SKILL.md in global skills directory", async () => {
-    await writeSkill(globalSkills, "SKILL.md", {
-      name: "paper-search",
-      version: "1.0.0",
-      type: "domain",
-      tools: ["web_search", "file_write"],
-      description: "Search and analyze academic papers",
-      trigger: "/paper-search",
-    }, "# Paper Search Skill\n\nSearch papers from Semantic Scholar.");
+    await writeSkill(
+      globalSkills,
+      "SKILL.md",
+      {
+        name: "paper-search",
+        version: "1.0.0",
+        type: "domain",
+        tools: ["web_search", "file_write"],
+        description: "Search and analyze academic papers",
+        trigger: "/paper-search",
+      },
+      "# Paper Search Skill\n\nSearch papers from Semantic Scholar.",
+    );
 
     const loader = new SkillLoader([globalSkills]);
     const skills = await loader.discover();
@@ -52,19 +57,29 @@ describe("SkillLoader", () => {
   });
 
   it("discovers skills from multiple directories", async () => {
-    await writeSkill(globalSkills, "SKILL.md", {
-      name: "global-skill",
-      type: "domain",
-      description: "Global skill",
-      trigger: "/global",
-    }, "Global skill body");
+    await writeSkill(
+      globalSkills,
+      "SKILL.md",
+      {
+        name: "global-skill",
+        type: "domain",
+        description: "Global skill",
+        trigger: "/global",
+      },
+      "Global skill body",
+    );
 
-    await writeSkill(projectSkills, "SKILL.md", {
-      name: "project-skill",
-      type: "workflow",
-      description: "Project skill",
-      trigger: "/project",
-    }, "Project skill body");
+    await writeSkill(
+      projectSkills,
+      "SKILL.md",
+      {
+        name: "project-skill",
+        type: "workflow",
+        description: "Project skill",
+        trigger: "/project",
+      },
+      "Project skill body",
+    );
 
     const loader = new SkillLoader([globalSkills, projectSkills]);
     const skills = await loader.discover();
@@ -74,12 +89,17 @@ describe("SkillLoader", () => {
 
   it("parses skill body as the prompt content", async () => {
     const body = "# Paper Search\n\n## Steps\n1. Parse query\n2. Search\n3. Summarize";
-    await writeSkill(globalSkills, "SKILL.md", {
-      name: "test-skill",
-      type: "domain",
-      description: "Test",
-      trigger: "/test",
-    }, body);
+    await writeSkill(
+      globalSkills,
+      "SKILL.md",
+      {
+        name: "test-skill",
+        type: "domain",
+        description: "Test",
+        trigger: "/test",
+      },
+      body,
+    );
 
     const loader = new SkillLoader([globalSkills]);
     const skills = await loader.discover();
@@ -111,19 +131,29 @@ describe("SkillLoader", () => {
     await fs.mkdir(paperDir, { recursive: true });
     await fs.mkdir(codeDir, { recursive: true });
 
-    await writeSkill(paperDir, "SKILL.md", {
-      name: "paper-search",
-      type: "domain",
-      description: "Search papers",
-      trigger: "/paper-search",
-    }, "Paper search prompt");
+    await writeSkill(
+      paperDir,
+      "SKILL.md",
+      {
+        name: "paper-search",
+        type: "domain",
+        description: "Search papers",
+        trigger: "/paper-search",
+      },
+      "Paper search prompt",
+    );
 
-    await writeSkill(codeDir, "SKILL.md", {
-      name: "code-review",
-      type: "domain",
-      description: "Review code",
-      trigger: "/code-review",
-    }, "Code review prompt");
+    await writeSkill(
+      codeDir,
+      "SKILL.md",
+      {
+        name: "code-review",
+        type: "domain",
+        description: "Review code",
+        trigger: "/code-review",
+      },
+      "Code review prompt",
+    );
 
     const loader = new SkillLoader([globalSkills]);
     const skills = await loader.discover();
@@ -131,15 +161,20 @@ describe("SkillLoader", () => {
   });
 
   it("parses all frontmatter fields correctly", async () => {
-    await writeSkill(globalSkills, "SKILL.md", {
-      name: "full-skill",
-      version: "2.0.0",
-      type: "workflow",
-      category: "research",
-      tools: ["web_search", "file_write", "bash"],
-      description: "A full featured skill",
-      trigger: "/full",
-    }, "Full skill body");
+    await writeSkill(
+      globalSkills,
+      "SKILL.md",
+      {
+        name: "full-skill",
+        version: "2.0.0",
+        type: "workflow",
+        category: "research",
+        tools: ["web_search", "file_write", "bash"],
+        description: "A full featured skill",
+        trigger: "/full",
+      },
+      "Full skill body",
+    );
 
     const loader = new SkillLoader([globalSkills]);
     const skills = await loader.discover();
@@ -155,19 +190,29 @@ describe("SkillLoader", () => {
   });
 
   it("deduplicates skills by trigger (project overrides global)", async () => {
-    await writeSkill(globalSkills, "SKILL.md", {
-      name: "dup-skill",
-      type: "domain",
-      description: "Global version",
-      trigger: "/dup",
-    }, "Global body");
+    await writeSkill(
+      globalSkills,
+      "SKILL.md",
+      {
+        name: "dup-skill",
+        type: "domain",
+        description: "Global version",
+        trigger: "/dup",
+      },
+      "Global body",
+    );
 
-    await writeSkill(projectSkills, "SKILL.md", {
-      name: "dup-skill",
-      type: "domain",
-      description: "Project version",
-      trigger: "/dup",
-    }, "Project body");
+    await writeSkill(
+      projectSkills,
+      "SKILL.md",
+      {
+        name: "dup-skill",
+        type: "domain",
+        description: "Project version",
+        trigger: "/dup",
+      },
+      "Project body",
+    );
 
     // Project dir comes later → overrides
     const loader = new SkillLoader([globalSkills, projectSkills]);

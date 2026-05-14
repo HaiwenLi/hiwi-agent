@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep -l \"class.*LLM\\\\|class.*Model\\\\|class.*Adapter\")",
+      "Bash(xargs grep -l \"Hook\\\\|hook\")",
+      "Bash(xargs grep -l \"litellm\\\\|LLM\\\\|ModelAdapter\")",
+      "Bash(xargs grep -l \"memory\\\\|Memory\")",
+      "Bash(xargs grep -l \"class.*Developer\\\\|class.*Researcher\\\\|class.*Proposer\")",
+      "Bash(pnpm install *)",
+      "Bash(pnpm approve-builds *)",
+      "Bash(npx @biomejs/biome --version)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(npx vitest *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git config *)",
+      "Bash(git commit *)",
+      "Bash(npx tsup *)",
+      "Bash(npx *)",
+      "Bash(git reset *)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm add *)",
+      "Bash(node -e \"const db = require\\('better-sqlite3'\\)\\(':memory:'\\); db.exec\\('CREATE TABLE t \\(id INTEGER\\)'\\); db.exec\\('INSERT INTO t VALUES \\(1\\)'\\); console.log\\(db.prepare\\('SELECT * FROM t'\\).all\\(\\)\\); db.close\\(\\)\")",
+      "Bash(pnpm config *)",
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm lint *)",
+      "Bash(pnpm lint:fix)",
+      "Bash(git checkout *)",
+      "Bash(pnpm vitest *)",
+      "Bash(git merge *)"
+    ]
+  }
+}

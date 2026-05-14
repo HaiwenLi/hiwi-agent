@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { MockAdapter } from "@/adapters/mock.js";
+import { ToolRegistry } from "@/core/tools.js";
+import { SkillExecutor } from "@/skills/executor.js";
 import { SkillLoader } from "@/skills/loader.js";
 import { SkillRegistry } from "@/skills/registry.js";
-import { SkillExecutor } from "@/skills/executor.js";
-import { ToolRegistry } from "@/core/tools.js";
-import { MockAdapter } from "@/adapters/mock.js";
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import os from "node:os";
 import type { AgentLoopConfig, Tool } from "@/types.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const LOOP_CONFIG: AgentLoopConfig = {
   maxLoops: 50,
@@ -61,7 +61,11 @@ describe("Integration: Skill Execution E2E", () => {
       description: "Read a file",
       inputSchema: { type: "object" },
       capabilities: ["ReadOnly"],
-      execute: async () => ({ toolCallId: "c1", content: "function foo() { return 1 }", isError: false }),
+      execute: async () => ({
+        toolCallId: "c1",
+        content: "function foo() { return 1 }",
+        isError: false,
+      }),
     };
     const glob: Tool = {
       name: "glob",
@@ -96,7 +100,9 @@ describe("Integration: Skill Execution E2E", () => {
 
     // 5. Execute skill
     const executor = new SkillExecutor(toolRegistry);
-    const skill = skillRegistry.getByTrigger("/code-review")!;
+    const skill = skillRegistry.getByTrigger("/code-review");
+    expect(skill).toBeDefined();
+    if (!skill) return;
 
     // Verify tool filtering — skill declares [read_file, glob], not bash
     const filteredTools = executor.filterTools(skill);
@@ -114,7 +120,11 @@ describe("Integration: Skill Execution E2E", () => {
         toolCalls: [{ id: "c1", name: "read_file", input: { path: "src/index.ts" } }],
         finishReason: "tool-calls",
       },
-      { content: "Found 2 issues: missing error handling, unused variable.", toolCalls: [], finishReason: "stop" },
+      {
+        content: "Found 2 issues: missing error handling, unused variable.",
+        toolCalls: [],
+        finishReason: "stop",
+      },
     ]);
 
     const result = await executor.execute(skill, "Review src/index.ts", {

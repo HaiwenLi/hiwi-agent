@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { SkillRegistry } from "@/skills/registry.js";
 import type { Skill } from "@/skills/loader.js";
+import { SkillRegistry } from "@/skills/registry.js";
+import { beforeEach, describe, expect, it } from "vitest";
 
 const makeSkill = (overrides: Partial<Skill> = {}): Skill => ({
   name: overrides.name ?? "test-skill",

@@ -56,4 +56,8 @@ export {
 // Skills
 export { SkillLoader, type Skill } from "./skills/loader.js";
 export { SkillRegistry, type ListOptions as SkillListOptions } from "./skills/registry.js";
-export { SkillExecutor, type SkillExecuteOptions, type SkillExecuteResult } from "./skills/executor.js";
+export {
+  SkillExecutor,
+  type SkillExecuteOptions,
+  type SkillExecuteResult,
+} from "./skills/executor.js";

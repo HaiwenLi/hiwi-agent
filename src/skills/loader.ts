@@ -50,7 +50,7 @@ export class SkillLoader {
   private async scanDirectory(dir: string): Promise<Skill[]> {
     const skills: Skill[] = [];
 
-    let entries;
+    let entries: Awaited<ReturnType<typeof fs.readdir>>;
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
     } catch {

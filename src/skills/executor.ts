@@ -1,8 +1,15 @@
-import { err, ok, type Result } from "neverthrow";
-import type { AgentLoopEvent, AgentLoopConfig, ModelAdapter, PermissionMode, Tool, ToolContext } from "../types.js";
-import type { Skill } from "./loader.js";
-import { ToolRegistry, type ToolRegistryOptions } from "../core/tools.js";
+import { type Result, err, ok } from "neverthrow";
 import { AgentLoop } from "../core/agent.js";
+import { ToolRegistry, type ToolRegistryOptions } from "../core/tools.js";
+import type {
+  AgentLoopConfig,
+  AgentLoopEvent,
+  ModelAdapter,
+  PermissionMode,
+  Tool,
+  ToolContext,
+} from "../types.js";
+import type { Skill } from "./loader.js";
 
 export interface SkillExecuteOptions {
   adapter: ModelAdapter;
@@ -25,7 +32,7 @@ export class SkillExecutor {
     this.registryOptions = registryOptions ?? {};
   }
 
-  buildSystemPrompt(skill: Skill, basePrompt: string = ""): string {
+  buildSystemPrompt(skill: Skill, basePrompt = ""): string {
     const header = [
       `## Active Skill: ${skill.name}`,
       `**Type:** ${skill.type}`,
@@ -83,7 +90,11 @@ export class SkillExecutor {
 
       return ok({ events });
     } catch (error) {
-      return err(new Error(`Skill execution failed: ${error instanceof Error ? error.message : String(error)}`));
+      return err(
+        new Error(
+          `Skill execution failed: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
     }
   }
 

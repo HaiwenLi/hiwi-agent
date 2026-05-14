@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { SkillExecutor } from "@/skills/executor.js";
-import { SkillRegistry } from "@/skills/registry.js";
-import { ToolRegistry } from "@/core/tools.js";
 import { MockAdapter } from "@/adapters/mock.js";
+import { ToolRegistry } from "@/core/tools.js";
+import { SkillExecutor } from "@/skills/executor.js";
 import type { Skill } from "@/skills/loader.js";
-import type { AgentLoopConfig, Tool, PermissionMode } from "@/types.js";
+import { SkillRegistry } from "@/skills/registry.js";
+import type { AgentLoopConfig, PermissionMode, Tool } from "@/types.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const DEFAULT_LOOP_CONFIG: AgentLoopConfig = {
   maxLoops: 50,
@@ -20,7 +20,9 @@ const makeSkill = (overrides: Partial<Skill> = {}): Skill => ({
   type: overrides.type ?? "domain",
   description: overrides.description ?? "Test skill",
   trigger: overrides.trigger ?? "/test",
-  prompt: overrides.prompt ?? "You are a test assistant. Follow these steps:\n1. Analyze input\n2. Respond",
+  prompt:
+    overrides.prompt ??
+    "You are a test assistant. Follow these steps:\n1. Analyze input\n2. Respond",
   tools: overrides.tools ?? ["read_file", "glob"],
   sourcePath: "/skills/test/SKILL.md",
 });
@@ -162,7 +164,7 @@ describe("SkillExecutor", () => {
       skillRegistry.register(skill);
 
       const result = await executor.execute(skill, "test", {
-        adapter: null as any,
+        adapter: null as unknown as ModelAdapter,
         permissionMode: "normal",
         loopConfig: DEFAULT_LOOP_CONFIG,
       });
