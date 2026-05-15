@@ -1,14 +1,18 @@
+import { AutoExtractor } from "../memory/auto-extract.js";
+import type { MemoryFileStore } from "../memory/file-store.js";
 import type {
   AgentLoopConfig,
   AgentLoopEvent,
   Message,
   ModelAdapter,
   PermissionMode,
+  ToolCall,
   ToolContext,
   ToolResult,
+  TokenUsage,
 } from "../types.js";
-import type { ToolRegistry } from "./tools.js";
 import { assembleSystemPrompt } from "./prompt/assembler.js";
+import type { ToolRegistry } from "./tools.js";
 
 // ─── IterationBudget ──────────────────────────────────────────
 
@@ -88,6 +92,7 @@ function shouldParallelize(calls: ToolCallInfo[], registry: ToolRegistry): Execu
 
 export class AgentLoop {
   private interrupted = false;
+  private autoExtractor?: AutoExtractor;
 
   constructor(
     private adapter: ModelAdapter,
@@ -95,7 +100,12 @@ export class AgentLoop {
     private permissionMode: PermissionMode,
     private config: AgentLoopConfig,
     private context?: ToolContext,
-  ) {}
+    private memoryStore?: MemoryFileStore,
+  ) {
+    if (memoryStore) {
+      this.autoExtractor = new AutoExtractor(adapter, memoryStore);
+    }
+  }
 
   interrupt(): void {
     this.interrupted = true;
@@ -122,15 +132,38 @@ export class AgentLoop {
     while (iteration < this.config.maxLoops && !budget.exhausted && !this.interrupted) {
       yield { type: "step-start", iteration };
 
-      const response = await this.adapter.chat(currentMessages);
-      emptyResponseCount = 0;
+      let content = "";
+      const toolCalls: ToolCall[] = [];
+      let finishReason: string = "stop";
+      let usage: TokenUsage | undefined;
 
-      if (response.content) {
-        yield { type: "text-delta", text: response.content, iteration };
+      if (this.config.streaming) {
+        for await (const chunk of this.adapter.stream(currentMessages)) {
+          if (chunk.type === "text-delta") {
+            content += chunk.text;
+            yield { type: "text-delta", text: chunk.text, iteration };
+          } else if (chunk.type === "tool-call") {
+            toolCalls.push(chunk.toolCall);
+          } else if (chunk.type === "finish") {
+            finishReason = chunk.finishReason;
+            usage = chunk.usage;
+          }
+        }
+      } else {
+        const response = await this.adapter.chat(currentMessages);
+        content = response.content;
+        toolCalls.push(...response.toolCalls);
+        finishReason = response.finishReason;
+        usage = response.usage;
+        if (content) {
+          yield { type: "text-delta", text: content, iteration };
+        }
       }
 
-      if (response.finishReason !== "tool-calls" || response.toolCalls.length === 0) {
-        if (!response.content && response.toolCalls.length === 0) {
+      emptyResponseCount = 0;
+
+      if (finishReason !== "tool-calls" || toolCalls.length === 0) {
+        if (!content && toolCalls.length === 0) {
           emptyResponseCount++;
           if (emptyResponseCount <= 1) {
             currentMessages.push(
@@ -146,10 +179,19 @@ export class AgentLoop {
           }
         }
 
+        if (this.autoExtractor && content) {
+          this.autoExtractor
+            .extract(messages)
+            .then((facts) => {
+              if (facts.length > 0) this.autoExtractor?.storeFacts(facts);
+            })
+            .catch(() => {});
+        }
+
         yield {
           type: "finish",
           finishReason: "completed",
-          usage: response.usage,
+          usage,
         };
         yield { type: "step-finish", iteration };
         return;
@@ -157,27 +199,27 @@ export class AgentLoop {
 
       currentMessages.push({
         role: "assistant",
-        content: response.content,
-        toolCalls: response.toolCalls,
+        content,
+        toolCalls,
       });
 
-      const execMode = shouldParallelize(response.toolCalls, this.toolRegistry);
+      const execMode = shouldParallelize(toolCalls, this.toolRegistry);
 
       let results: ToolResult[];
       if (execMode === "parallel") {
         results = await Promise.all(
-          response.toolCalls.map((tc) => this.executeTool(tc.id, tc.name, tc.input, ctx)),
+          toolCalls.map((tc) => this.executeTool(tc.id, tc.name, tc.input, ctx)),
         );
       } else {
         results = [];
-        for (const tc of response.toolCalls) {
+        for (const tc of toolCalls) {
           const result = await this.executeTool(tc.id, tc.name, tc.input, ctx);
           results.push(result);
         }
       }
 
-      for (let i = 0; i < response.toolCalls.length; i++) {
-        const tc = response.toolCalls[i];
+      for (let i = 0; i < toolCalls.length; i++) {
+        const tc = toolCalls[i];
         const result = results[i];
 
         yield {

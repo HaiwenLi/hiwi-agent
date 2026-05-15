@@ -1,21 +1,89 @@
 import { Box, Text, render, useApp, useInput } from "ink";
-import React, { useState } from "react";
+import React, { memo, useEffect, useState } from "react";
 
 export interface AppProps {
   onInput: (text: string) => Promise<void>;
 }
 
 export interface OutputLine {
+  id: number;
   text: string;
   role: "user" | "assistant" | "tool" | "system" | "error";
   streaming?: boolean;
 }
 
+// Module-level bridge: the App component wires its state setters here,
+// and renderApp writes into them so streaming flows through Ink's VDOM.
+const streamState = {
+  addLine: (_text: string, _role: OutputLine["role"]) => {},
+  setStreaming: (_text: string) => {},
+};
+
+const roleColor = (role: string) => {
+  switch (role) {
+    case "user":
+      return "cyan";
+    case "assistant":
+      return "green";
+    case "tool":
+      return "yellow";
+    case "error":
+      return "red";
+    default:
+      return "white";
+  }
+};
+
+const OutputLines = memo(function OutputLines({
+  lines,
+}: {
+  lines: OutputLine[];
+}) {
+  return (
+    <>
+      {lines.map((line) => (
+        <Box key={line.id} flexDirection="column">
+          <Text color={roleColor(line.role)}>{line.text}</Text>
+        </Box>
+      ))}
+    </>
+  );
+});
+
+const StreamingLine = memo(function StreamingLine({ text }: { text: string }) {
+  if (!text) return null;
+  return (
+    <Box>
+      <Text color="green">{text}</Text>
+    </Box>
+  );
+});
+
+const InputLine = memo(function InputLine({ input }: { input: string }) {
+  return (
+    <Box marginTop={1}>
+      <Text color="blue">{"> "}</Text>
+      <Text>{input}</Text>
+      <Text color="gray">█</Text>
+    </Box>
+  );
+});
+
 function App({ onInput }: AppProps) {
   const [lines, setLines] = useState<OutputLine[]>([]);
   const [input, setInput] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [currentStream, setCurrentStream] = useState("");
   const { exit } = useApp();
+
+  useEffect(() => {
+    streamState.addLine = (text, role) => {
+      pushLine(setLines, text, role);
+    };
+    streamState.setStreaming = (text) => {
+      setCurrentStream(text);
+    };
+  }, []);
 
   useInput((char, key) => {
     if (key.escape) {
@@ -23,14 +91,14 @@ function App({ onInput }: AppProps) {
       return;
     }
 
-    if (key.return) {
+    if (key.return && !key.shift) {
       if (input.trim() === "/exit" || input.trim() === "/quit") {
         exit();
         return;
       }
 
       const userText = input;
-      setLines((prev) => [...prev, { text: userText, role: "user" }]);
+      pushLine(setLines, userText, "user");
       setInput("");
       setProcessing(true);
 
@@ -45,79 +113,82 @@ function App({ onInput }: AppProps) {
       return;
     }
 
-    setInput((prev) => prev + char);
+    if (!key.ctrl && !key.meta && !key.shift) {
+      setInput((prev) => prev + char);
+    }
   });
 
-  const roleColor = (role: string) => {
-    switch (role) {
-      case "user":
-        return "cyan";
-      case "assistant":
-        return "green";
-      case "tool":
-        return "yellow";
-      case "error":
-        return "red";
-      default:
-        return "white";
-    }
-  };
-
   return (
-    <Box flexDirection="column">
-      {lines.map((line, i) => (
-        <Box key={i} flexDirection="column">
-          <Text color={roleColor(line.role)}>{line.text}</Text>
-        </Box>
-      ))}
-      {processing && <Text color="gray">Thinking...</Text>}
-      <Box marginTop={1}>
-        <Text color="blue">{"\n> "}</Text>
-        <Text>{input}</Text>
-        <Text color="gray">█</Text>
-      </Box>
+    <Box flexDirection="column" minHeight={1}>
+      <OutputLines lines={lines} />
+      {processing && currentStream && <StreamingLine text={currentStream} />}
+      {processing && !currentStream && <Text color="gray">Thinking...</Text>}
+      <InputLine input={input} />
     </Box>
   );
 }
 
-class StreamController {
-  private currentLine = "";
-  private active = false;
+let nextLineId = 0;
+const MAX_LINES = 500;
+let lastOutputText = "";
 
-  beginStream(): void {
-    this.active = true;
-    this.currentLine = "";
-  }
+function pushLine(
+  setLines: React.Dispatch<React.SetStateAction<OutputLine[]>>,
+  text: string,
+  role: OutputLine["role"],
+) {
+  setLines((prev) => {
+    const next = [...prev, { id: nextLineId++, text, role }];
+    return next.length > MAX_LINES ? next.slice(next.length - MAX_LINES) : next;
+  });
+}
+let streamingBuffer = "";
+let coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingFlush = false;
 
-  addChunk(chunk: string): void {
-    if (!this.active) {
-      this.beginStream();
-    }
-    this.currentLine += chunk;
-    process.stdout.write(chunk);
-  }
-
-  endStream(): void {
-    if (!this.active) return;
-    this.active = false;
-    process.stdout.write("\n");
-    this.currentLine = "";
-  }
+function flushStreaming() {
+  coalesceTimer = null;
+  pendingFlush = false;
+  streamState.setStreaming(streamingBuffer);
 }
 
 export function renderApp(props: AppProps) {
   const instance = render(React.createElement(App, props));
-  const streamController = new StreamController();
+  nextLineId = 0;
+  lastOutputText = "";
+  streamingBuffer = "";
+  if (coalesceTimer) {
+    clearTimeout(coalesceTimer);
+    coalesceTimer = null;
+  }
+  pendingFlush = false;
 
   return {
     addOutput: (text: string, _role: OutputLine["role"] = "assistant") => {
-      process.stdout.write(`${text}\n`);
+      if (text === lastOutputText) return;
+      lastOutputText = text;
+      streamState.addLine(text, _role);
     },
     addStreamChunk: (chunk: string) => {
-      streamController.addChunk(chunk);
+      streamingBuffer += chunk;
+      if (!pendingFlush) {
+        pendingFlush = true;
+        coalesceTimer = setTimeout(flushStreaming, 16);
+      }
     },
     endStream: () => {
-      streamController.endStream();
+      if (coalesceTimer) {
+        clearTimeout(coalesceTimer);
+        coalesceTimer = null;
+        pendingFlush = false;
+      }
+      streamState.setStreaming(streamingBuffer);
+      if (streamingBuffer) {
+        lastOutputText = streamingBuffer;
+        streamState.addLine(streamingBuffer, "assistant");
+      }
+      streamingBuffer = "";
+      streamState.setStreaming("");
     },
     waitUntilExit: () => instance.waitUntilExit(),
     clear: () => instance.clear(),
