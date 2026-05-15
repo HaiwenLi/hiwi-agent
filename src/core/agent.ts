@@ -8,6 +8,7 @@ import type {
   ToolResult,
 } from "../types.js";
 import type { ToolRegistry } from "./tools.js";
+import { assembleSystemPrompt } from "./prompt/assembler.js";
 
 // ─── IterationBudget ──────────────────────────────────────────
 
@@ -108,6 +109,13 @@ export class AgentLoop {
     };
 
     const currentMessages = [...messages];
+
+    const systemPrompt = await assembleSystemPrompt({
+      modelId: this.adapter.id,
+      workingDirectory: ctx.workingDirectory,
+    });
+    currentMessages.unshift({ role: "system", content: systemPrompt });
+
     let iteration = 0;
     let emptyResponseCount = 0;
 
