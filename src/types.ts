@@ -17,6 +17,8 @@ export interface ToolResult {
   toolCallId: string;
   content: string;
   isError: boolean;
+  title?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface TokenUsage {
@@ -81,9 +83,16 @@ export interface Tool {
   execute(input: unknown, context: ToolContext): Promise<ToolResult>;
 }
 
+export interface PermissionRequest {
+  tool: string;
+  capability: string;
+}
+
 export interface ToolContext {
   workingDirectory: string;
   sessionId: string;
+  abort?: AbortSignal;
+  askPermission?: (req: PermissionRequest) => Promise<boolean>;
 }
 
 export type PermissionMode = "normal" | "auto" | "yolo";

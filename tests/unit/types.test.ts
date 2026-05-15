@@ -13,6 +13,7 @@ import type {
   Tool,
   ToolCall,
   ToolCapability,
+  ToolContext,
   ToolDefinition,
   ToolResult,
 } from "@/types.js";
@@ -79,5 +80,68 @@ describe("Shared Types", () => {
       interruptible: true,
     };
     expect(config.maxLoops).toBe(50);
+  });
+});
+
+describe("ToolContext", () => {
+  it("accepts optional abort signal", () => {
+    const controller = new AbortController();
+    const ctx: ToolContext = {
+      workingDirectory: "/tmp",
+      sessionId: "s1",
+      abort: controller.signal,
+    };
+    expect(ctx.abort).toBe(controller.signal);
+  });
+
+  it("accepts optional askPermission callback", async () => {
+    const askPermission = async () => true;
+    const ctx: ToolContext = {
+      workingDirectory: "/tmp",
+      sessionId: "s1",
+      askPermission,
+    };
+    expect(await ctx.askPermission!({ tool: "bash", capability: "ExecCode" })).toBe(true);
+  });
+
+  it("works without optional fields", () => {
+    const ctx: ToolContext = {
+      workingDirectory: "/tmp",
+      sessionId: "s1",
+    };
+    expect(ctx.abort).toBeUndefined();
+    expect(ctx.askPermission).toBeUndefined();
+  });
+});
+
+describe("ToolResult extended fields", () => {
+  it("accepts optional title field", () => {
+    const result: ToolResult = {
+      toolCallId: "c1",
+      content: "file contents",
+      isError: false,
+      title: "Read src/index.ts",
+    };
+    expect(result.title).toBe("Read src/index.ts");
+  });
+
+  it("accepts optional metadata field", () => {
+    const result: ToolResult = {
+      toolCallId: "c1",
+      content: "3 files found",
+      isError: false,
+      metadata: { fileCount: 3, truncated: true },
+    };
+    expect(result.metadata?.fileCount).toBe(3);
+  });
+
+  it("works without optional fields", () => {
+    const result: ToolResult = {
+      toolCallId: "c1",
+      content: "ok",
+      isError: false,
+    };
+    expect(result.title).toBeUndefined();
+    expect(result.metadata).toBeUndefined();
   });
 });
