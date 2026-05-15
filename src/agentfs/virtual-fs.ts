@@ -45,6 +45,7 @@ export class VirtualFS {
   // ─── Initialization ──────────────────────────────────────────
 
   init(): void {
+    this.db.exec("PRAGMA foreign_keys = ON");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS fs_config (
         key TEXT PRIMARY KEY,
@@ -298,13 +299,16 @@ export class VirtualFS {
         );
       }
       // Overwrite: clear old data, update inode, write new chunks
-      this.db.prepare("DELETE FROM fs_data WHERE inode_id = ?").run(existing.inode_id);
-      this.db.prepare("DELETE FROM fs_symlink WHERE inode_id = ?").run(existing.inode_id);
-      const effectiveMode = options?.mode ?? existing.mode;
-      this.db
-        .prepare("UPDATE fs_inode SET size = ?, mode = ?, mtime = ?, atime = ? WHERE id = ?")
-        .run(buf.length, effectiveMode, now, now, existing.inode_id);
-      this.writeChunks(existing.inode_id, buf, chunkSize);
+      const doOverwrite = this.db.transaction(() => {
+        this.db.prepare("DELETE FROM fs_data WHERE inode_id = ?").run(existing.inode_id);
+        this.db.prepare("DELETE FROM fs_symlink WHERE inode_id = ?").run(existing.inode_id);
+        const effectiveMode = options?.mode ?? existing.mode;
+        this.db
+          .prepare("UPDATE fs_inode SET size = ?, mode = ?, mtime = ?, atime = ? WHERE id = ?")
+          .run(buf.length, effectiveMode, now, now, existing.inode_id);
+        this.writeChunks(existing.inode_id, buf, chunkSize);
+      });
+      doOverwrite();
     } else {
       // Create new inode + dentry
       const inodeId = this.createInode("file", mode, buf.length, now);
@@ -456,15 +460,18 @@ export class VirtualFS {
     }
 
     // Remove data, symlink entry, dentry, inode
-    this.db.prepare("DELETE FROM fs_data WHERE inode_id = ?").run(inodeId);
-    this.db.prepare("DELETE FROM fs_symlink WHERE inode_id = ?").run(inodeId);
+    const doUnlink = this.db.transaction(() => {
+      this.db.prepare("DELETE FROM fs_data WHERE inode_id = ?").run(inodeId);
+      this.db.prepare("DELETE FROM fs_symlink WHERE inode_id = ?").run(inodeId);
 
-    const { parentInode, name } = this.resolvePath(filePath);
-    this.db
-      .prepare("DELETE FROM fs_dentry WHERE parent_id = ? AND name = ?")
-      .run(parentInode, name);
+      const { parentInode, name } = this.resolvePath(filePath);
+      this.db
+        .prepare("DELETE FROM fs_dentry WHERE parent_id = ? AND name = ?")
+        .run(parentInode, name);
 
-    this.db.prepare("DELETE FROM fs_inode WHERE id = ?").run(inodeId);
+      this.db.prepare("DELETE FROM fs_inode WHERE id = ?").run(inodeId);
+    });
+    doUnlink();
   }
 
   rename(oldPath: string, newPath: string): void {
@@ -542,6 +549,18 @@ export class VirtualFS {
     this.ensureParentDirs(parentDir);
 
     const { parentInode, name } = this.resolvePath(normalized);
+
+    // Check destination does not already exist
+    const existing = this.db
+      .prepare("SELECT id FROM fs_dentry WHERE parent_id = ? AND name = ?")
+      .get(parentInode, name);
+    if (existing) {
+      throw Object.assign(
+        new Error(`EEXIST: file already exists '${linkPath}'`),
+        { code: "EEXIST" },
+      );
+    }
+
     const now = Date.now();
 
     // Create symlink inode
