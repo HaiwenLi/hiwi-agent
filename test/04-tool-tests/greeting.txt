@@ -1,0 +1,2 @@
+Hello, hiwi-agent!
+File operations work!
