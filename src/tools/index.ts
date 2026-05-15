@@ -5,6 +5,13 @@ import { createEditTool } from "./edit-tool.js";
 import { createGlobTool } from "./glob.js";
 import { createGrepTool } from "./grep.js";
 import { createBashTool } from "./bash.js";
+import { createApplyPatchTool } from "./apply-patch.js";
+import { createWebFetchTool } from "./web-fetch.js";
+import { createWebSearchTool } from "./web-search.js";
+import { createRepoOverviewTool } from "./repo-overview.js";
+import { createQuestionTool } from "./question.js";
+import { createTodoTool } from "./todo.js";
+import { createLspTool } from "./lsp.js";
 
 export function registerCoreTools(registry: ToolRegistry): void {
   registry.register(createReadTool());
@@ -13,6 +20,16 @@ export function registerCoreTools(registry: ToolRegistry): void {
   registry.register(createGlobTool());
   registry.register(createGrepTool());
   registry.register(createBashTool());
+}
+
+export function registerExtraTools(registry: ToolRegistry): void {
+  registry.register(createApplyPatchTool());
+  registry.register(createWebFetchTool());
+  registry.register(createWebSearchTool());
+  registry.register(createRepoOverviewTool());
+  registry.register(createQuestionTool());
+  registry.register(createTodoTool());
+  registry.register(createLspTool());
 }
 
 export {

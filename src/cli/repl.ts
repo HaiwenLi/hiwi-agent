@@ -6,7 +6,7 @@ import type { SessionStore } from "../memory/session.js";
 import { SkillExecutor } from "../skills/executor.js";
 import type { Skill } from "../skills/loader.js";
 import type { SkillRegistry } from "../skills/registry.js";
-import { registerCoreTools } from "../tools/index.js";
+import { registerCoreTools, registerExtraTools } from "../tools/index.js";
 import type { AgentLoopConfig, Message, PermissionMode } from "../types.js";
 import type { CommandContext, CommandRegistry } from "./commands.js";
 
@@ -33,6 +33,7 @@ export class REPL {
   constructor(deps: REPLDependencies) {
     this.deps = deps;
     registerCoreTools(deps.toolRegistry);
+    registerExtraTools(deps.toolRegistry);
   }
 
   async processInput(input: string): Promise<string> {
