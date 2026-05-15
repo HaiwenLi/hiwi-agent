@@ -17,6 +17,7 @@ export interface ToolCallRecord {
 export interface ToolCallStats {
   name: string;
   total_calls: number;
+  pending: number;
   successful: number;
   failed: number;
   avg_duration_ms: number | null;
@@ -60,9 +61,9 @@ export class AuditTrail {
     return row.id;
   }
 
-  success(id: number, result?: string): void {
+  success(id: number, result?: string): boolean {
     const now = Math.floor(Date.now() / 1000);
-    this.db.prepare(`
+    const info = this.db.prepare(`
       UPDATE tool_calls
       SET status = 'success',
           result = ?,
@@ -70,11 +71,12 @@ export class AuditTrail {
           duration_ms = (? - started_at) * 1000
       WHERE id = ?
     `).run(result ?? null, now, now, id);
+    return info.changes > 0;
   }
 
-  error(id: number, error: string): void {
+  error(id: number, error: string): boolean {
     const now = Math.floor(Date.now() / 1000);
-    this.db.prepare(`
+    const info = this.db.prepare(`
       UPDATE tool_calls
       SET status = 'error',
           error = ?,
@@ -82,6 +84,7 @@ export class AuditTrail {
           duration_ms = (? - started_at) * 1000
       WHERE id = ?
     `).run(error, now, now, id);
+    return info.changes > 0;
   }
 
   record(
@@ -135,6 +138,7 @@ export class AuditTrail {
         SELECT
           name,
           COUNT(*) AS total_calls,
+          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successful,
           SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS failed,
           AVG(duration_ms) AS avg_duration_ms

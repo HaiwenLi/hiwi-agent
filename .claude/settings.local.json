@@ -29,7 +29,19 @@
       "Bash(pnpm lint:fix)",
       "Bash(git checkout *)",
       "Bash(pnpm vitest *)",
-      "Bash(git merge *)"
+      "Bash(git merge *)",
+      "Bash(git branch *)",
+      "Bash(pnpm build *)",
+      "Bash(node *)",
+      "Skill(autoplan)",
+      "Bash(git log *)",
+      "Bash(git stash *)",
+      "Bash(git check-ignore *)",
+      "Bash(git worktree *)",
+      "Bash(npm install *)",
+      "Bash(pnpm biome *)",
+      "Bash(eza *)",
+      "Bash(git show *)"
     ]
   }
 }

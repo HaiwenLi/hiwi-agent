@@ -54,14 +54,48 @@ describe("AuditTrail", () => {
     expect(reads).toHaveLength(2);
   });
 
-  it("returns performance stats", () => {
+  it("returns performance stats with pending", () => {
+    trail.start("read", {}); // pending
     trail.record("read", 1000, 1002, {}, "ok");
     trail.record("read", 1000, 1004, {}, undefined, "fail");
     const stats = trail.getStats();
     const readStats = stats.find((s) => s.name === "read");
     expect(readStats).toBeDefined();
-    expect(readStats!.total_calls).toBe(2);
+    expect(readStats!.total_calls).toBe(3);
+    expect(readStats!.pending).toBe(1);
     expect(readStats!.successful).toBe(1);
     expect(readStats!.failed).toBe(1);
+  });
+
+  it("queries recent calls", () => {
+    const t0 = Math.floor(Date.now() / 1000) - 100;
+    trail.record("read", t0, t0 + 1, {}, "old");
+    trail.record("read", t0 + 5, t0 + 6, {}, "recent");
+    const recent = trail.getRecent(t0 + 2);
+    expect(recent).toHaveLength(1);
+    expect(recent[0].result).toBe("recent");
+  });
+
+  it("returns empty array for getByName with no match", () => {
+    const result = trail.getByName("nonexistent");
+    expect(result).toEqual([]);
+  });
+
+  it("returns empty array for getStats on empty db", () => {
+    const emptyDb = new Database(":memory:");
+    const emptyTrail = new AuditTrail(emptyDb);
+    emptyTrail.init();
+    expect(emptyTrail.getStats()).toEqual([]);
+    emptyDb.close();
+  });
+
+  it("success returns false for unknown id", () => {
+    const result = trail.success(99999, "should not work");
+    expect(result).toBe(false);
+  });
+
+  it("error returns false for unknown id", () => {
+    const result = trail.error(99999, "should not work");
+    expect(result).toBe(false);
   });
 });
