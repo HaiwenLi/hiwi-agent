@@ -71,3 +71,39 @@ Deviations from plan that were necessary during implementation.
 **Reason:** The REPL's `executeSkill` method instantiates `new SkillExecutor(this.deps.toolRegistry)` at runtime. A `type`-only import gets erased at compile time, causing `ReferenceError: SkillExecutor is not defined` when the skill trigger path executes. This only surfaced at test runtime since the plan's code listed SkillExecutor as a type import.
 
 **Files affected:** `src/cli/repl.ts`
+
+---
+
+### 3. SkillLoader Dirent type: wrong namespace
+
+**Plan:** `let entries: Awaited<ReturnType<typeof fs.readdir>>;` using `fs` from `node:fs/promises`.
+
+**Actual:** Changed to `let entries: import("node:fs").Dirent[];`.
+
+**Reason:** `pnpm build` (tsup DTS generation) failed with TS2322/TS2345/TS2367 errors. The inferred return type of `fs.readdir` with `withFileTypes: true` resolves to `Dirent<NonSharedBuffer>[]` under strict module resolution, causing type mismatches with `string`-based `path.join` results. Using the explicit `Dirent` type from `node:fs` (not `node:fs/promises`) resolves the issue. Vitest's transform pipeline handled this fine at test time, but `tsc` (used by tsup for DTS) did not.
+
+**Files affected:** `src/skills/loader.ts`
+
+---
+
+### 4. PermissionMode literal narrowing in CLI entry point
+
+**Plan:** `const permissionMode = { value: "normal" as const };`
+
+**Actual:** Changed to `const permissionMode: { value: PermissionMode } = { value: "normal" };` with an explicit `PermissionMode` import.
+
+**Reason:** `as const` narrows the type to the literal `"normal"`, but `REPL` expects `{ value: PermissionMode }` where `PermissionMode = "normal" | "auto" | "yolo"`. The `setPermissionMode` callback can assign `"yolo"` or `"auto"`, which is not assignable to the literal `"normal"`. tsup's DTS build caught this TS2322 error.
+
+**Files affected:** `src/cli/index.ts`
+
+---
+
+### 5. Build outputs and CLI entry point not wired
+
+**Plan:** Single tsup entry `src/index.ts`, `bin` field pointing to `dist/index.js`.
+
+**Actual:** Added dual tsup entry points (`src/index.ts` → `dist/index.js` for library, `src/cli/index.ts` → `dist/cli/index.js` for CLI). Added shebang, `--help` arg parsing, and auto-run call to `src/cli/index.ts`. Updated `bin` to `dist/cli/index.js`.
+
+**Reason:** The library entry (`src/index.ts`) only exports modules — it has no `main()` call or arg parsing. Running `node dist/index.js --help` produced no output because nothing executed. The CLI entry point (`src/cli/index.ts`) had the `main()` function but wasn't built or wired as the bin target.
+
+**Files affected:** `tsup.config.ts`, `package.json`, `src/cli/index.ts`
