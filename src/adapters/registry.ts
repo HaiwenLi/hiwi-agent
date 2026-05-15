@@ -19,12 +19,16 @@ export class ProviderRegistry {
     this.adapters.set(name, adapter);
   }
 
-  getActiveAdapter(): ModelAdapter {
-    const adapter = this.adapters.get(this.activeProvider);
+  getAdapter(name: string): ModelAdapter {
+    const adapter = this.adapters.get(name);
     if (!adapter) {
-      throw new Error(`No adapter registered for provider: ${this.activeProvider}`);
+      throw new Error(`No adapter registered for provider: ${name}`);
     }
     return adapter;
+  }
+
+  getActiveAdapter(): ModelAdapter {
+    return this.getAdapter(this.activeProvider);
   }
 
   setProvider(name: string): void {

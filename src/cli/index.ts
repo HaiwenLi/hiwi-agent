@@ -137,6 +137,8 @@ export async function main(options: CLIOptions = {}): Promise<void> {
     memoryManager,
     sessionStore,
     onOutput: (text) => process.stdout.write(`${text}\n`),
+    onStreamChunk: (chunk) => process.stdout.write(chunk),
+    onStreamEnd: () => process.stdout.write("\n"),
   });
 
   const readline = await import("node:readline");

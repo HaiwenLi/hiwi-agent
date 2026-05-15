@@ -22,6 +22,8 @@ export interface REPLDependencies {
   memoryManager: MemoryManager;
   sessionStore: SessionStore;
   onOutput: (text: string) => void;
+  onStreamChunk?: (chunk: string) => void;
+  onStreamEnd?: () => void;
   confirm?: (message: string) => Promise<boolean>;
 }
 
@@ -112,14 +114,20 @@ export class REPL {
     for await (const event of loop.run(this.messages)) {
       if (event.type === "text-delta" && event.text) {
         output += event.text;
+        this.deps.onStreamChunk?.(event.text);
       }
       if (event.type === "tool-call") {
-        output += `\n[Tool: ${event.toolName}]`;
+        const toolLine = `\n[Tool: ${event.toolName}]`;
+        output += toolLine;
+        this.deps.onStreamChunk?.(toolLine);
       }
       if (event.type === "tool-result" && event.toolResult) {
-        output += `\n[Result: ${event.toolResult.content.slice(0, 100)}]`;
+        const resultLine = `\n[Result: ${event.toolResult.content.slice(0, 100)}]`;
+        output += resultLine;
+        this.deps.onStreamChunk?.(resultLine);
       }
     }
+    this.deps.onStreamEnd?.();
 
     if (output) {
       this.messages.push({ role: "assistant", content: output });

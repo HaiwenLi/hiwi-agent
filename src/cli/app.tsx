@@ -5,9 +5,10 @@ export interface AppProps {
   onInput: (text: string) => Promise<void>;
 }
 
-interface OutputLine {
+export interface OutputLine {
   text: string;
   role: "user" | "assistant" | "tool" | "system" | "error";
+  streaming?: boolean;
 }
 
 function App({ onInput }: AppProps) {
@@ -71,7 +72,7 @@ function App({ onInput }: AppProps) {
       ))}
       {processing && <Text color="gray">Thinking...</Text>}
       <Box marginTop={1}>
-        <Text color="blue">&gt; </Text>
+        <Text color="blue">{"\n> "}</Text>
         <Text>{input}</Text>
         <Text color="gray">█</Text>
       </Box>
@@ -79,12 +80,44 @@ function App({ onInput }: AppProps) {
   );
 }
 
+class StreamController {
+  private currentLine = "";
+  private active = false;
+
+  beginStream(): void {
+    this.active = true;
+    this.currentLine = "";
+  }
+
+  addChunk(chunk: string): void {
+    if (!this.active) {
+      this.beginStream();
+    }
+    this.currentLine += chunk;
+    process.stdout.write(chunk);
+  }
+
+  endStream(): void {
+    if (!this.active) return;
+    this.active = false;
+    process.stdout.write("\n");
+    this.currentLine = "";
+  }
+}
+
 export function renderApp(props: AppProps) {
   const instance = render(React.createElement(App, props));
+  const streamController = new StreamController();
 
   return {
     addOutput: (text: string, _role: OutputLine["role"] = "assistant") => {
       process.stdout.write(`${text}\n`);
+    },
+    addStreamChunk: (chunk: string) => {
+      streamController.addChunk(chunk);
+    },
+    endStream: () => {
+      streamController.endStream();
     },
     waitUntilExit: () => instance.waitUntilExit(),
     clear: () => instance.clear(),

@@ -1,4 +1,5 @@
 import type { ProviderRegistry } from "../adapters/registry.js";
+import { testConnection } from "../adapters/connection-test.js";
 import type { MemoryManager } from "../memory/manager.js";
 import type { SessionStore } from "../memory/session.js";
 import type { SkillRegistry } from "../skills/registry.js";
@@ -169,6 +170,18 @@ export class CommandRegistry {
           return "YOLO mode enabled!";
         }
         return "YOLO mode not enabled.";
+      },
+    });
+
+    this.register({
+      name: "test",
+      description: "Test connection to current or specified provider",
+      handler: async (args, ctx) => {
+        const result = await testConnection(ctx.providerRegistry, args || undefined);
+        if (result.connected) {
+          return `Connected to ${result.provider}/${result.model} (${result.latencyMs}ms)`;
+        }
+        return `Connection failed: ${result.error}`;
       },
     });
 
