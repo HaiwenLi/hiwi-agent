@@ -274,3 +274,95 @@ Requires LSP client connection to running language servers. Auto-detect from pro
 - `D:\repos\opencode\packages\opencode\src\tool\lsp.ts` — LSP integration
 - `D:\repos\opencode\packages\opencode\src\tool\truncate.ts` — Output truncation
 - `D:\repos\opencode\packages\opencode\src\tool\repo_overview.ts` — Repo analysis
+
+---
+
+## Part C: TUI & Streaming (Requirements — TBD)
+
+> Status: requirements collected, needs discussion before planning.
+
+### Current State
+
+The REPL uses raw `readline` + `process.stdout.write` for output. The Ink TUI (`src/cli/app.tsx`) exists but is not wired into the REPL. Model responses are collected fully before printing — no streaming to the terminal.
+
+### Problem
+
+- Responses feel slow because the full response is buffered before display
+- No visual feedback while the model is "thinking" or executing tools
+- Ink's React reconciliation adds per-render overhead for real-time streaming
+
+### TUI Options for Phase 2
+
+| TUI | Speed | Notes |
+|-----|-------|-------|
+| **Raw readline** (current) | Fastest | No framework overhead. Simple but limited UI. |
+| **terminal-kit** | Very fast | Low-level terminal control, minimal overhead, good for complex layouts |
+| **blessed** | Fast | Mature, good for complex layouts, larger API surface |
+| **Ink** (wired in) | Moderate | React reconciliation adds latency per render cycle. Good ecosystem. |
+| **@clack/core** | Fast | Lightweight, prompt-style UIs. Used by `create-vite`, `create-svelte`. |
+| **Custom (ANSI escape codes)** | Fastest | Direct terminal manipulation. Maximum control, maximum effort. |
+
+### Streaming Requirements (TBD)
+
+- [ ] Stream tokens to terminal as they arrive (not buffer full response)
+- [ ] Show "thinking" indicator while model processes
+- [ ] Show tool call execution in real-time (tool name + status)
+- [ ] Markdown rendering in terminal (code blocks, bold, lists)
+- [ ] Interrupt streaming with Ctrl+C
+- [ ] Scrollback for long responses
+- [ ] Syntax highlighting for code blocks
+
+### Questions to Discuss
+
+1. **TUI framework choice** — stick with Ink, switch to terminal-kit, or go custom?
+2. **Streaming protocol** — SSE from adapter? Or use the existing async iterator?
+3. **Markdown rendering** — which library? (marked-terminal, cli-markdown, custom?)
+4. **Complexity budget** — how polished should Phase 2 TUI be vs. shipping fast?
+
+---
+
+## Part D: Coding System Prompt (Requirements — TBD)
+
+> Status: requirements collected, needs discussion before planning.
+
+### Current State
+
+No system prompt is sent to the model. The REPL sends raw user messages. The agent loop has no instructions about how to be a coding assistant.
+
+### What's Needed
+
+A default system prompt that makes hiwi-agent behave as a coding assistant when tools are available. Should cover:
+
+- [ ] **Role definition** — "You are a coding assistant with access to tools..."
+- [ ] **Tool usage instructions** — when to use read_file vs grep vs bash, how to edit files
+- [ ] **Safety rules** — don't delete files without confirmation, explain dangerous commands
+- [ ] **Code style** — prefer editing over rewriting, match existing code style, no unnecessary comments
+- [ ] **Workflow guidance** — explore first, then plan, then implement; verify after changes
+- [ ] **Error handling** — how to interpret tool errors, when to retry
+- [ ] **Memory awareness** — mention that /remember and /recall are available
+
+### Design Decisions (TBD)
+
+1. **Static vs. dynamic** — one fixed prompt, or assembled from skill prompts + context?
+2. **User customization** — allow overriding via config file?
+3. **Provider-specific variants** — different prompts for different model capabilities?
+4. **Context injection** — inject MEMORY.md, project structure, git status?
+
+### Reference Prompts
+
+- **Claude Code** — system prompt with tool descriptions, safety guardrails, code style rules
+- **OpenCode** — system prompt assembled from tools + project context + user preferences
+- **Cursor** — rules file (`.cursorrules`) merged into system prompt
+
+---
+
+## Open Questions (All Phases)
+
+> Collected requirements that need discussion before becoming plans.
+
+1. **TUI framework** — Ink vs terminal-kit vs custom? (Part C)
+2. **Streaming architecture** — adapter-level SSE vs agent-loop-level async iter? (Part C)
+3. **Coding prompt** — static template or dynamic assembly? (Part D)
+4. **Prompt customization** — config file? `.hiwi-rules` file? Both? (Part D)
+5. **Built-in tools priority** — which tools ship first? (Part B already planned, but confirm order)
+6. **Phase 2 sequencing** — which part first? Tools → TUI → Providers → Prompt?
