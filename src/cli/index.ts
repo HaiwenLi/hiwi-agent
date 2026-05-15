@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import os from "node:os";
 import path from "node:path";
 import { ProviderRegistry } from "../adapters/registry.js";
@@ -13,11 +14,47 @@ import { SkillLoader } from "../skills/loader.js";
 import { SkillRegistry } from "../skills/registry.js";
 import { CommandRegistry } from "./commands.js";
 import { REPL } from "./repl.js";
+import type { PermissionMode } from "../types.js";
 
 export interface CLIOptions {
   mcp?: boolean;
   port?: number;
   debug?: boolean;
+}
+
+function parseArgs(argv: string[]): CLIOptions {
+  const options: CLIOptions = {};
+  for (let i = 2; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--mcp") options.mcp = true;
+    else if (arg === "--port" && argv[i + 1]) options.port = Number.parseInt(argv[++i]);
+    else if (arg === "--debug") options.debug = true;
+    else if (arg === "--help" || arg === "-h") {
+      console.log(`hiwi-agent — Personal AI agent
+
+Usage:
+  hiwi-agent              Start interactive REPL
+  hiwi-agent --mcp        Start MCP server (stdio)
+  hiwi-agent --mcp --port <port>  Start MCP server (SSE)
+  hiwi-agent --debug      Enable debug logging
+  hiwi-agent --help       Show this help
+
+REPL commands:
+  /model <id>             Set active model
+  /provider <name>        Set active provider
+  /models                 List available models
+  /remember <name>: <content>  Save a memory
+  /recall <query>         Search memories
+  /forget <name>          Delete a memory
+  /skills                 List loaded skills
+  /sessions               List sessions
+  /yolo                   Toggle YOLO mode
+  /help                   Show commands
+  /exit                   Exit REPL`);
+      process.exit(0);
+    }
+  }
+  return options;
 }
 
 export async function main(options: CLIOptions = {}): Promise<void> {
@@ -84,7 +121,7 @@ export async function main(options: CLIOptions = {}): Promise<void> {
   const commandRegistry = new CommandRegistry();
   commandRegistry.registerBuiltinCommands();
 
-  const permissionMode = { value: "normal" as const };
+  const permissionMode: { value: PermissionMode } = { value: "normal" };
 
   const repl = new REPL({
     commandRegistry,
@@ -114,3 +151,10 @@ export async function main(options: CLIOptions = {}): Promise<void> {
 
   sessionStore.close();
 }
+
+// Auto-run when executed directly (not imported)
+const options = parseArgs(process.argv);
+main(options).catch((error) => {
+  console.error(`Fatal: ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(1);
+});
