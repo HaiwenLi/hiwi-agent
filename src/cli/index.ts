@@ -146,7 +146,10 @@ export async function main(options: CLIOptions = {}): Promise<void> {
 
   for await (const line of rl) {
     const result = await repl.processInput(line);
-    if (result === "exit") break;
+    if (result === "exit") {
+      rl.close();
+      break;
+    }
   }
 
   sessionStore.close();
