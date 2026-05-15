@@ -85,12 +85,14 @@ export class VirtualFS {
         target TEXT NOT NULL
       );
 
+      -- Reserved for overlay filesystem support (SPEC v0.4)
       CREATE TABLE IF NOT EXISTS fs_whiteout (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         parent_id INTEGER NOT NULL,
         name TEXT NOT NULL
       );
 
+      -- Reserved for overlay filesystem support (SPEC v0.4)
       CREATE TABLE IF NOT EXISTS fs_origin (
         inode_id INTEGER PRIMARY KEY REFERENCES fs_inode(id),
         origin TEXT NOT NULL

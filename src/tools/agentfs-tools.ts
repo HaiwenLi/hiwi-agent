@@ -146,7 +146,7 @@ export function createAgentFSTools(agentfs: AgentFS): Tool[] {
         type: "object",
         properties: {
           key: { type: "string", description: "Key for the value" },
-          value: { type: "string", description: "Value to store" },
+          value: { description: "Value to store (any JSON-serializable value)" },
         },
         required: ["key", "value"],
       },
