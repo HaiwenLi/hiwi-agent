@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadConfig, resolveApiKey, resolveConfig } from "@/core/config.js";
-import type { AgentConfig } from "@/types.js";
+import type { AgentConfig, SystemPromptConfig } from "@/types.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 describe("Config Module", () => {
@@ -115,5 +115,40 @@ describe("Config Module", () => {
       const result = await loadConfig(tmpDir);
       expect(result.isErr()).toBe(true);
     });
+  });
+});
+
+describe("systemPrompt config", () => {
+  const tmpDir = path.join(os.tmpdir(), "hiwi-config-sysprompt-test");
+
+  beforeEach(async () => {
+    await fs.mkdir(tmpDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  });
+
+  it("accepts systemPrompt.providerVariant", async () => {
+    await fs.writeFile(
+      path.join(tmpDir, "config.json"),
+      JSON.stringify({
+        systemPrompt: { providerVariant: "anthropic" },
+      }),
+    );
+
+    const result = await loadConfig(tmpDir);
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect((result.value as any).systemPrompt?.providerVariant).toBe("anthropic");
+    }
+  });
+
+  it("defaults to undefined when not specified", async () => {
+    const result = await loadConfig(tmpDir);
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect((result.value as any).systemPrompt).toBeUndefined();
+    }
   });
 });

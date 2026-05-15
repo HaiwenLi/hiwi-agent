@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { type Result, err, ok } from "neverthrow";
 import { z } from "zod";
-import type { AgentConfig, AgentLoopConfig, ProviderConfig } from "../types.js";
+import type { AgentConfig, AgentLoopConfig, ProviderConfig, SystemPromptConfig } from "../types.js";
 
 const ProviderConfigSchema = z.object({
   apiKey: z.string().optional(),
@@ -40,6 +40,9 @@ const AgentConfigPartialSchema = z.object({
       interruptible: z.boolean().optional(),
     })
     .optional(),
+  systemPrompt: z.object({
+    providerVariant: z.enum(["auto", "anthropic", "gpt", "default"]).optional(),
+  }).optional(),
 });
 
 const DEFAULT_CONFIG: AgentConfig = {
@@ -87,6 +90,8 @@ function deepMerge(base: AgentConfig, override: Record<string, unknown>): AgentC
     };
   if (override.agent !== undefined)
     result.agent = { ...base.agent, ...(override.agent as Partial<AgentLoopConfig>) };
+  if (override.systemPrompt !== undefined)
+    result.systemPrompt = { ...base.systemPrompt, ...(override.systemPrompt as Partial<SystemPromptConfig>) };
   return result;
 }
 

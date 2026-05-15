@@ -139,11 +139,16 @@ export interface ProviderConfig {
   models?: string[];
 }
 
+export interface SystemPromptConfig {
+  providerVariant?: "auto" | "anthropic" | "gpt" | "default";
+}
+
 export interface AgentConfig {
   activeProvider: string;
   activeModel: string;
   providers: Record<string, ProviderConfig>;
   agent: AgentLoopConfig;
+  systemPrompt?: SystemPromptConfig;
 }
 
 // ─── Model Info (for listing) ─────────────────────────────────
