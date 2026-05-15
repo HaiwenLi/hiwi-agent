@@ -1,4 +1,5 @@
 import type { ToolRegistry } from "../core/tools.js";
+import type { AgentFS } from "../agentfs/index.js";
 import { createReadTool } from "./read.js";
 import { createWriteTool } from "./write.js";
 import { createEditTool } from "./edit-tool.js";
@@ -12,6 +13,7 @@ import { createRepoOverviewTool } from "./repo-overview.js";
 import { createQuestionTool } from "./question.js";
 import { createTodoTool } from "./todo.js";
 import { createLspTool } from "./lsp.js";
+import { createAgentFSTools } from "./agentfs-tools.js";
 
 export function registerCoreTools(registry: ToolRegistry): void {
   registry.register(createReadTool());
@@ -30,6 +32,12 @@ export function registerExtraTools(registry: ToolRegistry): void {
   registry.register(createQuestionTool());
   registry.register(createTodoTool());
   registry.register(createLspTool());
+}
+
+export function registerAgentFSTools(registry: ToolRegistry, agentfs: AgentFS): void {
+  for (const tool of createAgentFSTools(agentfs)) {
+    registry.register(tool);
+  }
 }
 
 export {
