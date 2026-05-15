@@ -9,7 +9,10 @@ import type {
   Tool,
   ToolContext,
 } from "../types.js";
+import { SkillComposer } from "./composer.js";
 import type { Skill } from "./loader.js";
+import { MetaExecutor } from "./meta-executor.js";
+import type { SkillRegistry } from "./registry.js";
 
 export interface SkillExecuteOptions {
   adapter: ModelAdapter;
@@ -26,10 +29,19 @@ export interface SkillExecuteResult {
 export class SkillExecutor {
   private toolRegistry: ToolRegistry;
   private registryOptions: ToolRegistryOptions;
+  private skillRegistry?: SkillRegistry;
+  private skillLoader?: import("./loader.js").SkillLoader;
 
-  constructor(toolRegistry: ToolRegistry, registryOptions?: ToolRegistryOptions) {
+  constructor(
+    toolRegistry: ToolRegistry,
+    registryOptions?: ToolRegistryOptions,
+    skillRegistry?: SkillRegistry,
+    skillLoader?: import("./loader.js").SkillLoader,
+  ) {
     this.toolRegistry = toolRegistry;
     this.registryOptions = registryOptions ?? {};
+    this.skillRegistry = skillRegistry;
+    this.skillLoader = skillLoader;
   }
 
   buildSystemPrompt(skill: Skill, basePrompt = ""): string {
@@ -61,6 +73,76 @@ export class SkillExecutor {
   }
 
   async execute(
+    skill: Skill,
+    userMessage: string,
+    options: SkillExecuteOptions,
+  ): Promise<Result<SkillExecuteResult, Error>> {
+    try {
+      if (skill.type === "workflow") {
+        return this.executeWorkflow(skill, userMessage, options);
+      }
+      if (skill.type === "meta") {
+        return this.executeMeta(skill, userMessage);
+      }
+      // domain skill — existing path
+      return await this.executeDomain(skill, userMessage, options);
+    } catch (error) {
+      return err(
+        new Error(
+          `Skill execution failed: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+    }
+  }
+
+  private async executeWorkflow(
+    _skill: Skill,
+    userMessage: string,
+    options: SkillExecuteOptions,
+  ): Promise<Result<SkillExecuteResult, Error>> {
+    if (!this.skillRegistry) {
+      return err(new Error("SkillRegistry not available for workflow execution"));
+    }
+
+    const workflows = this.skillRegistry.list({ type: "workflow" });
+    const workflowDef: import("./composer.js").WorkflowDefinition = {
+      steps: workflows.map((s) => ({ skill: s.trigger, input: userMessage })),
+    };
+
+    const composer = new SkillComposer(this);
+    return composer.execute(workflowDef, userMessage, options);
+  }
+
+  private async executeMeta(
+    skill: Skill,
+    userMessage: string,
+  ): Promise<Result<SkillExecuteResult, Error>> {
+    if (!this.skillRegistry) {
+      return err(new Error("SkillRegistry not available for meta execution"));
+    }
+
+    const meta = new MetaExecutor(this.skillRegistry);
+    let action: import("./meta-executor.js").MetaAction;
+
+    if (userMessage.includes("list")) {
+      action = { type: "list-skills" };
+    } else if (userMessage.includes("remove") || userMessage.includes("delete")) {
+      const name = userMessage.replace(/.*?(remove|delete)\s+/i, "").trim();
+      action = { type: "remove-skill", name };
+    } else if (userMessage.includes("install")) {
+      action = { type: "install-skill", url: userMessage };
+    } else if (userMessage.includes("config") || userMessage.includes("set")) {
+      const parts = userMessage.split(/\s+/);
+      action = { type: "configure", key: parts[1] ?? "", value: parts.slice(2).join(" ") };
+    } else {
+      action = { type: "self-improve", feedback: userMessage };
+    }
+
+    const result = await meta.execute(action);
+    return ok({ events: [{ type: "text-delta", text: result }] });
+  }
+
+  private async executeDomain(
     skill: Skill,
     userMessage: string,
     options: SkillExecuteOptions,

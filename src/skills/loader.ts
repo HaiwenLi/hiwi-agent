@@ -15,7 +15,7 @@ export interface Skill {
   sourcePath: string;
 }
 
-const SkillFrontmatterSchema = z.object({
+export const SkillFrontmatterSchema = z.object({
   name: z.string(),
   version: z.string().optional(),
   type: z.enum(["domain", "workflow", "meta"]).default("domain"),
