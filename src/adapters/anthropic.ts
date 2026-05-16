@@ -10,7 +10,7 @@ import type {
   ToolDefinition,
 } from "../types.js";
 
-const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
+export const ANTHROPIC_MODELS: Record<string, ModelCapabilities> = {
   "claude-sonnet-4-6": { tools: true, vision: true, maxTokens: 16384, contextWindow: 200_000 },
   "claude-opus-4-7": { tools: true, vision: true, maxTokens: 32768, contextWindow: 200_000 },
   "claude-haiku-4-5": { tools: true, vision: true, maxTokens: 8192, contextWindow: 200_000 },
@@ -26,7 +26,7 @@ export class AnthropicAdapter implements ModelAdapter {
 
   constructor(options: { apiKey: string; model?: string }) {
     this.id = options.model ?? DEFAULT_MODEL;
-    this.capabilities = MODEL_CAPABILITIES[this.id] ?? MODEL_CAPABILITIES[DEFAULT_MODEL];
+    this.capabilities = ANTHROPIC_MODELS[this.id] ?? ANTHROPIC_MODELS[DEFAULT_MODEL];
     this.client = new Anthropic({ apiKey: options.apiKey });
   }
 

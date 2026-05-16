@@ -5,10 +5,11 @@ import type {
   ModelAdapter,
   ModelCapabilities,
   StreamChunk,
+  ToolCall,
   ToolDefinition,
 } from "../types.js";
 
-const OLLAMA_CAPABILITIES: Record<string, ModelCapabilities> = {
+export const OLLAMA_MODELS: Record<string, ModelCapabilities> = {
   llama3: { tools: true, vision: false, maxTokens: 8192, contextWindow: 8192 },
   "llama3.1": { tools: true, vision: false, maxTokens: 32768, contextWindow: 128_000 },
   "qwen2.5": { tools: true, vision: false, maxTokens: 8192, contextWindow: 32768 },
@@ -32,7 +33,7 @@ export class OllamaAdapter implements ModelAdapter {
   constructor(options: { baseUrl?: string; model?: string }) {
     this.id = options.model ?? "llama3";
     this.baseUrl = options.baseUrl ?? "http://localhost:11434";
-    this.capabilities = OLLAMA_CAPABILITIES[this.id] ?? DEFAULT_CAPABILITIES;
+    this.capabilities = OLLAMA_MODELS[this.id] ?? DEFAULT_CAPABILITIES;
   }
 
   async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
@@ -65,7 +66,12 @@ export class OllamaAdapter implements ModelAdapter {
         message: {
           role: string;
           content: string;
-          tool_calls?: Array<{ function: { name: string; arguments: Record<string, unknown> } }>;
+          tool_calls?: Array<{
+            function: {
+              name: string;
+              arguments: Record<string, unknown>;
+            };
+          }>;
         };
         done: boolean;
         prompt_eval_count?: number;
@@ -79,7 +85,7 @@ export class OllamaAdapter implements ModelAdapter {
           name: tc.function.name,
           input: tc.function.arguments,
         })),
-        finishReason: "stop",
+        finishReason: data.message.tool_calls?.length ? "tool-calls" : "stop",
         usage: {
           inputTokens: data.prompt_eval_count ?? 0,
           outputTokens: data.eval_count ?? 0,
@@ -96,6 +102,9 @@ export class OllamaAdapter implements ModelAdapter {
       messages: this.convertMessages(messages),
       stream: true,
     };
+    if (options?.tools?.length) {
+      body.tools = this.convertTools(options.tools);
+    }
 
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: "POST",
@@ -109,7 +118,10 @@ export class OllamaAdapter implements ModelAdapter {
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    let totalOutput = 0;
+
+    // Accumulate streaming tool call fragments
+    const toolCallMap = new Map<number, { name: string; arguments: string }>();
+    let hasToolCalls = false;
 
     try {
       while (true) {
@@ -121,22 +133,56 @@ export class OllamaAdapter implements ModelAdapter {
           if (!line.trim()) continue;
           try {
             const chunk = JSON.parse(line) as {
-              message?: { content?: string };
+              message?: {
+                content?: string;
+                tool_calls?: Array<{
+                  function: { name?: string; arguments?: Record<string, unknown> };
+                }>;
+              };
               done?: boolean;
               prompt_eval_count?: number;
               eval_count?: number;
             };
+
             if (chunk.message?.content) {
-              totalOutput += chunk.message.content.length;
               yield { type: "text-delta", text: chunk.message.content };
             }
+
+            // Ollama can emit tool_calls in streaming chunks
+            if (chunk.message?.tool_calls) {
+              for (let i = 0; i < chunk.message.tool_calls.length; i++) {
+                const tc = chunk.message.tool_calls[i];
+                if (!toolCallMap.has(i)) {
+                  toolCallMap.set(i, { name: "", arguments: "" });
+                }
+                const entry = toolCallMap.get(i)!;
+                if (tc.function.name) entry.name = tc.function.name;
+                if (tc.function.arguments) {
+                  entry.arguments += JSON.stringify(tc.function.arguments);
+                }
+              }
+              hasToolCalls = true;
+            }
+
             if (chunk.done) {
+              // Emit accumulated tool calls
+              for (const [, tc] of toolCallMap) {
+                yield {
+                  type: "tool-call",
+                  toolCall: {
+                    id: `ollama-tc-${toolCallMap.size}`,
+                    name: tc.name,
+                    input: JSON.parse(tc.arguments || "{}"),
+                  },
+                };
+              }
+
               yield {
                 type: "finish",
-                finishReason: "stop",
+                finishReason: hasToolCalls ? "tool-calls" : "stop",
                 usage: {
                   inputTokens: chunk.prompt_eval_count ?? 0,
-                  outputTokens: chunk.eval_count ?? totalOutput,
+                  outputTokens: chunk.eval_count ?? 0,
                 },
               };
             }
@@ -150,10 +196,32 @@ export class OllamaAdapter implements ModelAdapter {
     }
   }
 
-  private convertMessages(messages: Message[]): Array<{ role: string; content: string }> {
-    return messages
-      .filter((m) => m.role !== "tool")
-      .map((m) => ({ role: m.role, content: m.content }));
+  private convertMessages(messages: Message[]): Array<Record<string, unknown>> {
+    return messages.map((msg) => {
+      switch (msg.role) {
+        case "system":
+          return { role: "system", content: msg.content };
+        case "user":
+          return { role: "user", content: msg.content };
+        case "assistant": {
+          const result: Record<string, unknown> = {
+            role: "assistant",
+            content: msg.content || "",
+          };
+          if (msg.toolCalls?.length) {
+            result.tool_calls = msg.toolCalls.map((tc) => ({
+              function: { name: tc.name, arguments: tc.input },
+            }));
+          }
+          return result;
+        }
+        case "tool":
+          return {
+            role: "tool",
+            content: msg.content,
+          };
+      }
+    });
   }
 
   private convertTools(tools: ToolDefinition[]): Array<{

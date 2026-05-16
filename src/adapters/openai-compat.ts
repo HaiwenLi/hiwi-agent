@@ -9,7 +9,7 @@ import type {
   ToolDefinition,
 } from "../types.js";
 
-const PROVIDER_CAPABILITIES: Record<string, ModelCapabilities> = {
+export const OPENAI_COMPAT_MODELS: Record<string, ModelCapabilities> = {
   "gpt-4o": { tools: true, vision: true, maxTokens: 16384, contextWindow: 128_000 },
   "gpt-4o-mini": { tools: true, vision: true, maxTokens: 16384, contextWindow: 128_000 },
   "deepseek-v3": { tools: true, vision: false, maxTokens: 8192, contextWindow: 128_000 },
@@ -41,7 +41,7 @@ export class OpenAICompatAdapter implements ModelAdapter {
   }) {
     this.id = options.model ?? "gpt-4o";
     this.provider = options.provider;
-    this.capabilities = PROVIDER_CAPABILITIES[this.id] ?? DEFAULT_CAPABILITIES;
+    this.capabilities = OPENAI_COMPAT_MODELS[this.id] ?? DEFAULT_CAPABILITIES;
     this.client = new OpenAI({
       apiKey: options.apiKey ?? "dummy",
       baseURL: options.baseUrl,
