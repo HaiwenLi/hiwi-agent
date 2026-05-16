@@ -1,8 +1,8 @@
+import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { promises as fs } from "node:fs";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { TruncationService } from "@/tools/truncation.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 describe("TruncationService", () => {
   let service: TruncationService;
@@ -76,7 +76,10 @@ describe("TruncationService", () => {
       await fs.utimes(oldFile, oldDate, oldDate);
 
       await service.cleanup();
-      const exists = await fs.access(oldFile).then(() => true).catch(() => false);
+      const exists = await fs
+        .access(oldFile)
+        .then(() => true)
+        .catch(() => false);
       expect(exists).toBe(false);
     });
 
@@ -85,7 +88,10 @@ describe("TruncationService", () => {
       await fs.writeFile(recentFile, "recent data");
 
       await service.cleanup();
-      const exists = await fs.access(recentFile).then(() => true).catch(() => false);
+      const exists = await fs
+        .access(recentFile)
+        .then(() => true)
+        .catch(() => false);
       expect(exists).toBe(true);
     });
   });

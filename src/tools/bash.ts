@@ -1,5 +1,5 @@
-import path from "node:path";
 import { spawn } from "node:child_process";
+import path from "node:path";
 import type { Tool, ToolContext, ToolResult } from "../types.js";
 import { TruncationService } from "./truncation.js";
 
@@ -13,7 +13,8 @@ export function createBashTool(truncationDir?: string): Tool {
 
   return {
     name: "bash",
-    description: "Execute a shell command and return its output. Supports timeout, working directory, and output truncation.",
+    description:
+      "Execute a shell command and return its output. Supports timeout, working directory, and output truncation.",
     inputSchema: {
       type: "object",
       properties: {
@@ -26,26 +27,32 @@ export function createBashTool(truncationDir?: string): Tool {
     capabilities: ["ExecCode"],
 
     async execute(input: unknown, ctx: ToolContext): Promise<ToolResult> {
-      const { command, timeout = DEFAULT_TIMEOUT, workdir } = input as {
+      const {
+        command,
+        timeout = DEFAULT_TIMEOUT,
+        workdir,
+      } = input as {
         command: string;
         timeout?: number;
         workdir?: string;
       };
 
       const cwd = workdir
-        ? (path.isAbsolute(workdir) ? workdir : path.resolve(ctx.workingDirectory, workdir))
+        ? path.isAbsolute(workdir)
+          ? workdir
+          : path.resolve(ctx.workingDirectory, workdir)
         : ctx.workingDirectory;
 
       try {
         const result = await runCommand(command, cwd, timeout, ctx.abort);
-        const title = command.length > TITLE_MAX_LENGTH
-          ? `${command.slice(0, TITLE_MAX_LENGTH)}...`
-          : command;
+        const title =
+          command.length > TITLE_MAX_LENGTH ? `${command.slice(0, TITLE_MAX_LENGTH)}...` : command;
 
         if (result.exitCode !== 0) {
           return {
             toolCallId: "",
-            content: result.stderr || result.stdout || `Command exited with code ${result.exitCode}`,
+            content:
+              result.stderr || result.stdout || `Command exited with code ${result.exitCode}`,
             isError: true,
             title: `Bash: ${title}`,
             metadata: { exitCode: result.exitCode },

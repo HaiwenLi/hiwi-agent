@@ -6,9 +6,7 @@ export const lineTrimmedReplacer: Replacer = (content, oldString) => {
 
   for (let i = 0; i <= contentLines.length - oldLines.length; i++) {
     const slice = contentLines.slice(i, i + oldLines.length);
-    const allMatch = slice.every(
-      (line, j) => line.trim() === oldLines[j].trim(),
-    );
+    const allMatch = slice.every((line, j) => line.trim() === oldLines[j].trim());
     if (allMatch) {
       const matchedText = slice.join("\n");
       const index = contentLines.slice(0, i).join("\n").length + (i > 0 ? 1 : 0);

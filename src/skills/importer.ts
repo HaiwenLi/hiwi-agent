@@ -1,7 +1,7 @@
-import { createGunzip } from "node:zlib";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { createGunzip } from "node:zlib";
 import { type Result, err, ok } from "neverthrow";
 import * as tar from "tar-stream";
 import { SkillLoader } from "./loader.js";
@@ -34,7 +34,9 @@ export class SkillImporter {
       const data = Buffer.from(await response.arrayBuffer());
       return this.extractAndInstall(data);
     } catch (error) {
-      return err(new Error(`Import failed: ${error instanceof Error ? error.message : String(error)}`));
+      return err(
+        new Error(`Import failed: ${error instanceof Error ? error.message : String(error)}`),
+      );
     }
   }
 
@@ -63,6 +65,7 @@ export class SkillImporter {
         extract.on("error", reject);
 
         const readable = Readable.from(decompressed);
+        // biome-ignore lint/suspicious/noExplicitAny: stream type mismatch
         readable.pipe(extract as any);
       });
 
@@ -92,7 +95,9 @@ export class SkillImporter {
 
       return ok(skill);
     } catch (error) {
-      return err(new Error(`Extraction failed: ${error instanceof Error ? error.message : String(error)}`));
+      return err(
+        new Error(`Extraction failed: ${error instanceof Error ? error.message : String(error)}`),
+      );
     }
   }
 

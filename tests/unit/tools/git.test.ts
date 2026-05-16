@@ -1,4 +1,4 @@
-import { createGitTool, parseGitStatus, parseGitLog } from "@/tools/git.js";
+import { createGitTool, parseGitLog, parseGitStatus } from "@/tools/git.js";
 import type { ToolContext } from "@/types.js";
 import { describe, expect, it } from "vitest";
 
@@ -58,10 +58,7 @@ describe("createGitTool", () => {
   });
 
   it("handles detached HEAD in status", () => {
-    const output = [
-      "# branch.oid abc123",
-      "# branch.head (detached)",
-    ].join("\n");
+    const output = ["# branch.oid abc123", "# branch.head (detached)"].join("\n");
 
     const status = parseGitStatus(output);
 

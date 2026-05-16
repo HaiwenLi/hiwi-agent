@@ -1,16 +1,16 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import path from "node:path";
+import { type ChildProcess, spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
+import path from "node:path";
 import type { Tool, ToolContext, ToolResult } from "../types.js";
-import type { Location, DocumentSymbol, HoverResult, Position } from "./lsp/types.js";
 import {
-  buildRequest,
   buildNotification,
+  buildRequest,
   encodeMessage,
   filePathToUri,
   toLspPosition,
 } from "./lsp/client.js";
 import { getServerForFile } from "./lsp/servers.js";
+import type { DocumentSymbol, HoverResult, Location, Position } from "./lsp/types.js";
 
 // ─── Valid Operations ──────────────────────────────────────────
 
@@ -44,10 +44,7 @@ const clientCache = new Map<string, LspClient>();
 
 // ─── Client Lifecycle ──────────────────────────────────────────
 
-async function getOrCreateClient(
-  root: string,
-  filePath: string,
-): Promise<LspClient> {
+async function getOrCreateClient(root: string, filePath: string): Promise<LspClient> {
   const server = getServerForFile(filePath);
   if (!server) {
     throw new Error(`No LSP server configured for file: ${filePath}`);
@@ -73,7 +70,7 @@ async function getOrCreateClient(
   };
 
   // Read responses from stdout
-  child.stdout!.on("data", (data: Buffer) => {
+  child.stdout?.on("data", (data: Buffer) => {
     client.buffer += data.toString();
     processBuffer(client);
   });
@@ -81,17 +78,21 @@ async function getOrCreateClient(
   clientCache.set(key, client);
 
   // Initialize the server
-  const initRequest = buildRequest("initialize", {
-    processId: process.pid,
-    rootUri: filePathToUri(root),
-    capabilities: {},
-  }, client.nextId++);
+  const initRequest = buildRequest(
+    "initialize",
+    {
+      processId: process.pid,
+      rootUri: filePathToUri(root),
+      capabilities: {},
+    },
+    client.nextId++,
+  );
   const initResult = await sendRequest(client, initRequest, 10000);
   client.initialized = true;
 
   // Send initialized notification
   const initNotif = buildNotification("initialized", {});
-  client.process.stdin!.write(encodeMessage(initNotif));
+  client.process.stdin?.write(encodeMessage(initNotif));
 
   return client;
 }
@@ -105,7 +106,7 @@ function processBuffer(client: LspClient): void {
     const match = headerPart.match(/Content-Length:\s*(\d+)/i);
     if (!match) break;
 
-    const contentLength = parseInt(match[1], 10);
+    const contentLength = Number.parseInt(match[1], 10);
     const bodyStart = headerEnd + 4;
     if (client.buffer.length < bodyStart + contentLength) break;
 
@@ -143,7 +144,7 @@ function sendRequest(
     }, timeoutMs);
 
     client.pending.set(req.id, { resolve, reject, timer });
-    client.process.stdin!.write(encodeMessage(req as Parameters<typeof encodeMessage>[0]));
+    client.process.stdin?.write(encodeMessage(req as Parameters<typeof encodeMessage>[0]));
   });
 }
 
@@ -171,7 +172,7 @@ function formatSymbols(symbols: DocumentSymbol[], indent = ""): string {
   return symbols
     .map((sym) => {
       const line = `${indent}${sym.name} (kind: ${sym.kind}) [${sym.range.start.line + 1}:${sym.range.start.character + 1}]`;
-      const children = sym.children ? formatSymbols(sym.children, indent + "  ") : "";
+      const children = sym.children ? formatSymbols(sym.children, `${indent}  `) : "";
       return children ? `${line}\n${children}` : line;
     })
     .join("\n");
@@ -277,7 +278,7 @@ export function createLspTool(): Tool {
             text: content,
           },
         });
-        client.process.stdin!.write(encodeMessage(didOpen));
+        client.process.stdin?.write(encodeMessage(didOpen));
       } catch (error) {
         return {
           toolCallId: "",
@@ -288,17 +289,20 @@ export function createLspTool(): Tool {
 
       // Document symbol doesn't require position
       if (operation === "documentSymbol") {
-        const req = buildRequest("textDocument/documentSymbol", {
-          textDocument: { uri },
-        }, client.nextId++);
+        const req = buildRequest(
+          "textDocument/documentSymbol",
+          {
+            textDocument: { uri },
+          },
+          client.nextId++,
+        );
         try {
           const result = await sendRequest(client, req, 10000);
           const symbols = result as DocumentSymbol[] | null;
           return {
             toolCallId: "",
-            content: symbols && symbols.length > 0
-              ? formatSymbols(symbols)
-              : "No document symbols found",
+            content:
+              symbols && symbols.length > 0 ? formatSymbols(symbols) : "No document symbols found",
             isError: false,
             title: `LSP documentSymbol ${path.basename(resolvedPath)}`,
           };
@@ -331,10 +335,14 @@ export function createLspTool(): Tool {
             method = "textDocument/definition";
             result = await sendRequest(
               client,
-              buildRequest(method, {
-                textDocument: { uri },
-                position,
-              }, client.nextId++),
+              buildRequest(
+                method,
+                {
+                  textDocument: { uri },
+                  position,
+                },
+                client.nextId++,
+              ),
               10000,
             );
             return {
@@ -348,11 +356,15 @@ export function createLspTool(): Tool {
             method = "textDocument/references";
             result = await sendRequest(
               client,
-              buildRequest(method, {
-                textDocument: { uri },
-                position,
-                context: { includeDeclaration: true },
-              }, client.nextId++),
+              buildRequest(
+                method,
+                {
+                  textDocument: { uri },
+                  position,
+                  context: { includeDeclaration: true },
+                },
+                client.nextId++,
+              ),
               10000,
             );
             return {
@@ -366,10 +378,14 @@ export function createLspTool(): Tool {
             method = "textDocument/hover";
             result = await sendRequest(
               client,
-              buildRequest(method, {
-                textDocument: { uri },
-                position,
-              }, client.nextId++),
+              buildRequest(
+                method,
+                {
+                  textDocument: { uri },
+                  position,
+                },
+                client.nextId++,
+              ),
               10000,
             );
             return {
@@ -383,10 +399,14 @@ export function createLspTool(): Tool {
             method = "textDocument/implementation";
             result = await sendRequest(
               client,
-              buildRequest(method, {
-                textDocument: { uri },
-                position,
-              }, client.nextId++),
+              buildRequest(
+                method,
+                {
+                  textDocument: { uri },
+                  position,
+                },
+                client.nextId++,
+              ),
               10000,
             );
             return {

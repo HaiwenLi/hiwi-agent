@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
 import { applyHunk } from "@/tools/patch/apply.js";
 import type { AddFileHunk, DeleteFileHunk, UpdateFileHunk } from "@/tools/patch/types.js";
+import { describe, expect, it } from "vitest";
 
 describe("applyHunk", () => {
   it("returns joined lines for add hunk", () => {

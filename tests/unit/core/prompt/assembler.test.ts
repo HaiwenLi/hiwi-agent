@@ -1,8 +1,8 @@
+import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { promises as fs } from "node:fs";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { assembleSystemPrompt } from "@/core/prompt/assembler.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 describe("assembleSystemPrompt", () => {
   let tempDir: string;
@@ -25,10 +25,7 @@ describe("assembleSystemPrompt", () => {
   });
 
   it("includes .hiwi-rules content when file exists", async () => {
-    await fs.writeFile(
-      path.join(tempDir, ".hiwi-rules"),
-      "Always use TypeScript strict mode",
-    );
+    await fs.writeFile(path.join(tempDir, ".hiwi-rules"), "Always use TypeScript strict mode");
     const result = await assembleSystemPrompt({
       modelId: "claude-sonnet-4-6",
       workingDirectory: tempDir,
@@ -37,10 +34,7 @@ describe("assembleSystemPrompt", () => {
   });
 
   it("includes MEMORY.md content when file exists", async () => {
-    await fs.writeFile(
-      path.join(tempDir, "MEMORY.md"),
-      "# Project Memory\nImportant context here",
-    );
+    await fs.writeFile(path.join(tempDir, "MEMORY.md"), "# Project Memory\nImportant context here");
     const result = await assembleSystemPrompt({
       modelId: "claude-sonnet-4-6",
       workingDirectory: tempDir,
@@ -72,14 +66,8 @@ describe("assembleSystemPrompt", () => {
   });
 
   it("orders layers correctly: base -> env -> rules -> memory", async () => {
-    await fs.writeFile(
-      path.join(tempDir, ".hiwi-rules"),
-      "RULES_CONTENT",
-    );
-    await fs.writeFile(
-      path.join(tempDir, "MEMORY.md"),
-      "MEMORY_CONTENT",
-    );
+    await fs.writeFile(path.join(tempDir, ".hiwi-rules"), "RULES_CONTENT");
+    await fs.writeFile(path.join(tempDir, "MEMORY.md"), "MEMORY_CONTENT");
     const result = await assembleSystemPrompt({
       modelId: "claude-sonnet-4-6",
       workingDirectory: tempDir,

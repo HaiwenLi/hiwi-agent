@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
 import type { Tool, ToolContext, ToolResult } from "../types.js";
 
@@ -34,7 +34,7 @@ const ECOSYSTEM_FILES: Record<string, string> = {
   "requirements.txt": "Python",
   "go.mod": "Go",
   "Cargo.toml": "Rust",
-  "Gemfile": "Ruby",
+  Gemfile: "Ruby",
   "composer.json": "PHP",
   "build.gradle": "Java/Kotlin",
   "pom.xml": "Java",
@@ -63,7 +63,7 @@ async function buildStructure(
   // So we stop recursing when currentDepth >= maxDepth
   if (lines.length >= limit) return;
 
-  let entries;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch {
@@ -113,13 +113,11 @@ export function createRepoOverviewTool(): Tool {
       properties: {
         path: {
           type: "string",
-          description:
-            "Path to the repository directory (defaults to workingDirectory)",
+          description: "Path to the repository directory (defaults to workingDirectory)",
         },
         depth: {
           type: "number",
-          description:
-            "Maximum depth for directory structure display (default: 3)",
+          description: "Maximum depth for directory structure display (default: 3)",
         },
       },
     },
@@ -156,9 +154,7 @@ export function createRepoOverviewTool(): Tool {
 
       // Read top-level files for ecosystem detection
       const topEntries = await fs.readdir(targetPath, { withFileTypes: true });
-      const topFileNames = new Set(
-        topEntries.filter((e) => e.isFile()).map((e) => e.name),
-      );
+      const topFileNames = new Set(topEntries.filter((e) => e.isFile()).map((e) => e.name));
 
       // Detect ecosystems
       const ecosystems: string[] = [];
@@ -180,10 +176,7 @@ export function createRepoOverviewTool(): Tool {
       const entryPoints: string[] = [];
       if (topFileNames.has("package.json")) {
         try {
-          const pkgContent = await fs.readFile(
-            path.join(targetPath, "package.json"),
-            "utf-8",
-          );
+          const pkgContent = await fs.readFile(path.join(targetPath, "package.json"), "utf-8");
           const pkg = JSON.parse(pkgContent) as Record<string, unknown>;
 
           if (typeof pkg.main === "string") entryPoints.push(pkg.main);
@@ -192,28 +185,19 @@ export function createRepoOverviewTool(): Tool {
           if (typeof pkg.bin === "string") {
             entryPoints.push(pkg.bin);
           } else if (typeof pkg.bin === "object" && pkg.bin !== null) {
-            for (const val of Object.values(
-              pkg.bin as Record<string, string>,
-            )) {
+            for (const val of Object.values(pkg.bin as Record<string, string>)) {
               entryPoints.push(val);
             }
           }
 
-          if (
-            typeof pkg.exports === "object" &&
-            pkg.exports !== null
-          ) {
-            for (const key of Object.keys(
-              pkg.exports as Record<string, unknown>,
-            )) {
+          if (typeof pkg.exports === "object" && pkg.exports !== null) {
+            for (const key of Object.keys(pkg.exports as Record<string, unknown>)) {
               if (key.startsWith(".")) {
                 const exportVal = (pkg.exports as Record<string, unknown>)[key];
                 if (typeof exportVal === "string") {
                   entryPoints.push(exportVal);
                 } else if (typeof exportVal === "object" && exportVal !== null) {
-                  for (const subVal of Object.values(
-                    exportVal as Record<string, string>,
-                  )) {
+                  for (const subVal of Object.values(exportVal as Record<string, string>)) {
                     if (typeof subVal === "string") {
                       entryPoints.push(subVal);
                     }
@@ -229,14 +213,7 @@ export function createRepoOverviewTool(): Tool {
 
       // Build directory structure
       const structureLines: string[] = [];
-      await buildStructure(
-        targetPath,
-        "",
-        0,
-        depth,
-        structureLines,
-        STRUCTURE_LIMIT,
-      );
+      await buildStructure(targetPath, "", 0, depth, structureLines, STRUCTURE_LIMIT);
 
       // Assemble output
       const sections: string[] = [];

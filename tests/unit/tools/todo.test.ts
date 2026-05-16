@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createTodoTool } from "@/tools/todo.js";
 import { todoStore } from "@/core/todo-store.js";
+import { createTodoTool } from "@/tools/todo.js";
 import type { Tool, ToolContext } from "@/types.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 describe("todo tool", () => {
   let tool: Tool;
@@ -39,7 +39,7 @@ describe("todo tool", () => {
 
     const stored = todoStore.get("test-session");
     expect(stored).toHaveLength(2);
-    expect(stored![0].content).toBe("Write tests");
+    expect(stored?.[0].content).toBe("Write tests");
   });
 
   it("updates existing todos", async () => {
@@ -68,9 +68,9 @@ describe("todo tool", () => {
     expect(result.isError).toBe(false);
 
     const stored = todoStore.get("test-session");
-    expect(stored![0].status).toBe("completed");
-    expect(stored![1].status).toBe("in_progress");
-    expect(stored![1].priority).toBe("medium");
+    expect(stored?.[0].status).toBe("completed");
+    expect(stored?.[1].status).toBe("in_progress");
+    expect(stored?.[1].priority).toBe("medium");
   });
 
   it("returns title with pending count", async () => {
@@ -91,9 +91,7 @@ describe("todo tool", () => {
   it("validates status values", async () => {
     const result = await tool.execute(
       {
-        todos: [
-          { content: "Bad task", status: "invalid_status", priority: "high" },
-        ],
+        todos: [{ content: "Bad task", status: "invalid_status", priority: "high" }],
       },
       ctx,
     );
@@ -123,9 +121,9 @@ describe("todo tool", () => {
     const storedB = todoStore.get("other-session");
 
     expect(storedA).toHaveLength(1);
-    expect(storedA![0].content).toBe("Session A task");
+    expect(storedA?.[0].content).toBe("Session A task");
 
     expect(storedB).toHaveLength(1);
-    expect(storedB![0].content).toBe("Session B task");
+    expect(storedB?.[0].content).toBe("Session B task");
   });
 });

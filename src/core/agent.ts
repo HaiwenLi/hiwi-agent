@@ -137,26 +137,46 @@ export class AgentLoop {
       let finishReason: string = "stop";
       let usage: TokenUsage | undefined;
 
+      const chatOptions = {
+        tools: this.toolRegistry.toToolDefinitions(),
+      };
+
       if (this.config.streaming) {
-        for await (const chunk of this.adapter.stream(currentMessages)) {
+        for await (const chunk of this.adapter.stream(currentMessages, chatOptions)) {
           if (chunk.type === "text-delta") {
             content += chunk.text;
             yield { type: "text-delta", text: chunk.text, iteration };
           } else if (chunk.type === "tool-call") {
             toolCalls.push(chunk.toolCall);
+            yield {
+              type: "tool-call",
+              toolName: chunk.toolCall.name,
+              toolCallId: chunk.toolCall.id,
+              toolInput: chunk.toolCall.input,
+              iteration,
+            };
           } else if (chunk.type === "finish") {
             finishReason = chunk.finishReason;
             usage = chunk.usage;
           }
         }
       } else {
-        const response = await this.adapter.chat(currentMessages);
+        const response = await this.adapter.chat(currentMessages, chatOptions);
         content = response.content;
         toolCalls.push(...response.toolCalls);
         finishReason = response.finishReason;
         usage = response.usage;
         if (content) {
           yield { type: "text-delta", text: content, iteration };
+        }
+        for (const tc of response.toolCalls) {
+          yield {
+            type: "tool-call",
+            toolName: tc.name,
+            toolCallId: tc.id,
+            toolInput: tc.input,
+            iteration,
+          };
         }
       }
 
@@ -222,13 +242,6 @@ export class AgentLoop {
         const tc = toolCalls[i];
         const result = results[i];
 
-        yield {
-          type: "tool-call",
-          toolName: tc.name,
-          toolCallId: tc.id,
-          toolInput: tc.input,
-          iteration,
-        };
         yield { type: "tool-result", toolResult: result, toolCallId: tc.id, iteration };
 
         currentMessages.push({

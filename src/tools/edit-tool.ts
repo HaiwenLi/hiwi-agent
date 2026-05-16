@@ -1,15 +1,15 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Tool, ToolContext, ToolResult } from "../types.js";
-import { type MatchResult, replaceMatch } from "./edit/strategy.js";
-import { simpleReplacer } from "./edit/simple.js";
-import { lineTrimmedReplacer } from "./edit/line-trimmed.js";
 import { blockAnchorReplacer } from "./edit/block-anchor.js";
-import { whitespaceNormReplacer } from "./edit/whitespace-norm.js";
-import { lineEndingNormReplacer } from "./edit/line-ending-norm.js";
 import { escapeNormReplacer } from "./edit/escape-norm.js";
 import { fuzzyBlockReplacer } from "./edit/fuzzy-block.js";
+import { lineEndingNormReplacer } from "./edit/line-ending-norm.js";
+import { lineTrimmedReplacer } from "./edit/line-trimmed.js";
 import { multiFuzzyReplacer } from "./edit/multi-fuzzy.js";
+import { simpleReplacer } from "./edit/simple.js";
+import { type MatchResult, replaceMatch } from "./edit/strategy.js";
+import { whitespaceNormReplacer } from "./edit/whitespace-norm.js";
 
 type ReplacerFn = (content: string, oldString: string, newString: string) => MatchResult | null;
 
@@ -27,7 +27,8 @@ const STRATEGIES: ReplacerFn[] = [
 export function createEditTool(): Tool {
   return {
     name: "edit_file",
-    description: "Edit a file by replacing oldString with newString. Tries multiple matching strategies from exact to fuzzy. Use replaceAll to replace all occurrences.",
+    description:
+      "Edit a file by replacing oldString with newString. Tries multiple matching strategies from exact to fuzzy. Use replaceAll to replace all occurrences.",
     inputSchema: {
       type: "object",
       properties: {
@@ -41,7 +42,12 @@ export function createEditTool(): Tool {
     capabilities: ["WriteFiles"],
 
     async execute(input: unknown, ctx: ToolContext): Promise<ToolResult> {
-      const { path: rawPath, oldString, newString, replaceAll } = input as {
+      const {
+        path: rawPath,
+        oldString,
+        newString,
+        replaceAll,
+      } = input as {
         path: string;
         oldString: string;
         newString: string;
@@ -141,10 +147,10 @@ async function executeReplaceAll(
 function countOccurrences(content: string, search: string): number {
   if (search.length === 0) return 0;
   let count = 0;
-  let pos = 0;
-  while ((pos = content.indexOf(search, pos)) !== -1) {
+  let pos = content.indexOf(search, 0);
+  while (pos !== -1) {
     count++;
-    pos += search.length;
+    pos = content.indexOf(search, pos + search.length);
   }
   return count;
 }

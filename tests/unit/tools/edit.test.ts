@@ -1,9 +1,9 @@
+import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { promises as fs } from "node:fs";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createEditTool } from "@/tools/edit-tool.js";
 import type { Tool, ToolContext } from "@/types.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 describe("edit_file tool", () => {
   let tempDir: string;
@@ -51,10 +51,7 @@ describe("edit_file tool", () => {
   it("returns error when oldString matches multiple times (without replaceAll)", async () => {
     const filePath = path.join(tempDir, "test.txt");
     await fs.writeFile(filePath, "foo bar foo baz foo");
-    const result = await tool.execute(
-      { path: filePath, oldString: "foo", newString: "qux" },
-      ctx,
-    );
+    const result = await tool.execute({ path: filePath, oldString: "foo", newString: "qux" }, ctx);
     expect(result.isError).toBe(true);
     expect(result.content).toContain("times");
   });

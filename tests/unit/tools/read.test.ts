@@ -1,9 +1,9 @@
+import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { promises as fs } from "node:fs";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createReadTool } from "@/tools/read.js";
 import type { Tool, ToolContext } from "@/types.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 describe("read_file tool", () => {
   let tempDir: string;
@@ -67,10 +67,7 @@ describe("read_file tool", () => {
   });
 
   it("returns error for non-existent path", async () => {
-    const result = await tool.execute(
-      { path: path.join(tempDir, "nope.txt") },
-      ctx,
-    );
+    const result = await tool.execute({ path: path.join(tempDir, "nope.txt") }, ctx);
     expect(result.isError).toBe(true);
     expect(result.content).toContain("not found");
   });

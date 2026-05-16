@@ -65,12 +65,15 @@ export function createWebFetchTool(): Tool {
     capabilities: ["NetworkAccess"],
 
     async execute(input: unknown, ctx: ToolContext): Promise<ToolResult> {
-      const { url, format = "markdown", timeout = DEFAULT_TIMEOUT_MS } =
-        input as {
-          url: string;
-          format?: "markdown" | "text" | "html";
-          timeout?: number;
-        };
+      const {
+        url,
+        format = "markdown",
+        timeout = DEFAULT_TIMEOUT_MS,
+      } = input as {
+        url: string;
+        format?: "markdown" | "text" | "html";
+        timeout?: number;
+      };
 
       // Validate URL scheme
       if (!url || !/^https?:\/\//i.test(url)) {
@@ -82,10 +85,7 @@ export function createWebFetchTool(): Tool {
       }
 
       // Clamp timeout
-      const timeoutMs = Math.min(
-        Math.max(timeout, 1),
-        MAX_TIMEOUT_MS,
-      );
+      const timeoutMs = Math.min(Math.max(timeout, 1), MAX_TIMEOUT_MS);
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -144,8 +144,7 @@ export function createWebFetchTool(): Tool {
 
         // Non-HTML content — return raw
         const isHTML =
-          contentType.includes("text/html") ||
-          contentType.includes("application/xhtml");
+          contentType.includes("text/html") || contentType.includes("application/xhtml");
 
         if (!isHTML && format !== "html") {
           return {
@@ -165,7 +164,6 @@ export function createWebFetchTool(): Tool {
           case "text":
             content = extractTextFromHTML(body);
             break;
-          case "markdown":
           default:
             content = convertHTMLToMarkdown(body);
             break;
@@ -187,8 +185,7 @@ export function createWebFetchTool(): Tool {
           };
         }
 
-        const message =
-          err instanceof Error ? err.message : String(err);
+        const message = err instanceof Error ? err.message : String(err);
         return {
           toolCallId: "",
           content: `Fetch failed: ${message}`,

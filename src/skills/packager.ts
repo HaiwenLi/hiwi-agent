@@ -1,10 +1,10 @@
-import { createGzip } from "node:zlib";
-import { createReadStream, promises as fs } from "node:fs";
+import { promises as fs, createReadStream } from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { createGzip } from "node:zlib";
+import matter from "gray-matter";
 import { type Result, err, ok } from "neverthrow";
 import * as tar from "tar-stream";
-import matter from "gray-matter";
 import { SkillFrontmatterSchema } from "./loader.js";
 
 export class SkillPackager {
@@ -45,7 +45,9 @@ export class SkillPackager {
 
       return ok(Buffer.concat(chunks));
     } catch (error) {
-      return err(new Error(`Packaging failed: ${error instanceof Error ? error.message : String(error)}`));
+      return err(
+        new Error(`Packaging failed: ${error instanceof Error ? error.message : String(error)}`),
+      );
     }
   }
 }

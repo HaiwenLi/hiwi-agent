@@ -1,4 +1,4 @@
-import type { Tool, ToolContext, ToolResult, QuestionPrompt } from "../types.js";
+import type { QuestionPrompt, Tool, ToolContext, ToolResult } from "../types.js";
 
 export function createQuestionTool(): Tool {
   return {
@@ -60,9 +60,7 @@ export function createQuestionTool(): Tool {
 
       const answers = await ctx.askUserQuestions(questions);
 
-      const lines = Object.entries(answers).map(
-        ([question, answer]) => `${question} = ${answer}`,
-      );
+      const lines = Object.entries(answers).map(([question, answer]) => `${question} = ${answer}`);
 
       return {
         toolCallId: "",

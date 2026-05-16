@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
 import type { Tool, ToolContext, ToolResult } from "../types.js";
 
@@ -7,7 +7,7 @@ const MAX_RESULTS = 100;
 async function walk(dir: string, results: string[], limit: number): Promise<void> {
   if (results.length >= limit) return;
 
-  let entries;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch {
@@ -52,7 +52,7 @@ function patternMatches(pattern: string, filePath: string, basePath: string): bo
 }
 
 function globToRegex(pattern: string): RegExp {
-  let regex = pattern
+  const regex = pattern
     .replace(/\./g, "\\.")
     .replace(/\*\*/g, "{{GLOBSTAR}}")
     .replace(/\*/g, "[^/]*")
@@ -64,12 +64,16 @@ function globToRegex(pattern: string): RegExp {
 export function createGlobTool(): Tool {
   return {
     name: "glob",
-    description: "Fast file pattern matching. Returns file paths sorted by modification time. Use to find files by name patterns like **/*.ts or src/**/*.tsx.",
+    description:
+      "Fast file pattern matching. Returns file paths sorted by modification time. Use to find files by name patterns like **/*.ts or src/**/*.tsx.",
     inputSchema: {
       type: "object",
       properties: {
         pattern: { type: "string", description: 'Glob pattern (e.g., "**/*.ts", "src/**/*.tsx")' },
-        path: { type: "string", description: "Directory to search in (defaults to workingDirectory)" },
+        path: {
+          type: "string",
+          description: "Directory to search in (defaults to workingDirectory)",
+        },
       },
       required: ["pattern"],
     },
@@ -107,13 +111,14 @@ export function createGlobTool(): Tool {
         const shown = withMtime.slice(0, MAX_RESULTS);
         const lines = shown.map((item) => item.path);
 
-        const content = lines.length > 0
-          ? lines.join("\n")
-          : `0 files matching "${pattern}" in ${basePath}`;
+        const content =
+          lines.length > 0 ? lines.join("\n") : `0 files matching "${pattern}" in ${basePath}`;
 
         return {
           toolCallId: "",
-          content: truncated ? `${content}\n... (${withMtime.length} total, showing first ${MAX_RESULTS})` : content,
+          content: truncated
+            ? `${content}\n... (${withMtime.length} total, showing first ${MAX_RESULTS})`
+            : content,
           isError: false,
           title: `Glob "${pattern}" (${shown.length} files)`,
           metadata: {

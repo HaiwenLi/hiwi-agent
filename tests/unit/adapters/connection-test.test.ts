@@ -1,15 +1,19 @@
 import { testConnection } from "@/adapters/connection-test.js";
-import type { ModelAdapter } from "@/types.js";
 import { ProviderRegistry } from "@/adapters/registry.js";
+import type { ModelAdapter } from "@/types.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-function createMockAdapter(id: string, provider: string, opts: {
-  shouldFail?: boolean;
-  latencyMs?: number;
-  supportsTools?: boolean;
-  supportsVision?: boolean;
-  contextWindow?: number;
-} = {}): ModelAdapter {
+function createMockAdapter(
+  id: string,
+  provider: string,
+  opts: {
+    shouldFail?: boolean;
+    latencyMs?: number;
+    supportsTools?: boolean;
+    supportsVision?: boolean;
+    contextWindow?: number;
+  } = {},
+): ModelAdapter {
   return {
     id,
     provider,
@@ -60,11 +64,13 @@ describe("testConnection", () => {
   });
 
   it("returns connected result on successful test", async () => {
-    registry.registerAdapter("anthropic", createMockAdapter(
-      "claude-sonnet-4-6",
+    registry.registerAdapter(
       "anthropic",
-      { supportsVision: true, contextWindow: 200000 },
-    ));
+      createMockAdapter("claude-sonnet-4-6", "anthropic", {
+        supportsVision: true,
+        contextWindow: 200000,
+      }),
+    );
 
     const result = await testConnection(registry);
 
@@ -79,11 +85,10 @@ describe("testConnection", () => {
   });
 
   it("reports failure when adapter throws", async () => {
-    registry.registerAdapter("anthropic", createMockAdapter(
-      "claude-sonnet-4-6",
+    registry.registerAdapter(
       "anthropic",
-      { shouldFail: true },
-    ));
+      createMockAdapter("claude-sonnet-4-6", "anthropic", { shouldFail: true }),
+    );
 
     const result = await testConnection(registry);
 
@@ -93,14 +98,8 @@ describe("testConnection", () => {
   });
 
   it("tests a specific provider when specified", async () => {
-    registry.registerAdapter("anthropic", createMockAdapter(
-      "opaque-model",
-      "anthropic",
-    ));
-    registry.registerAdapter("ollama", createMockAdapter(
-      "llama3",
-      "ollama",
-    ));
+    registry.registerAdapter("anthropic", createMockAdapter("opaque-model", "anthropic"));
+    registry.registerAdapter("ollama", createMockAdapter("llama3", "ollama"));
 
     const result = await testConnection(registry, "ollama");
 
@@ -109,10 +108,7 @@ describe("testConnection", () => {
   });
 
   it("reports missing adapter for unknown provider", async () => {
-    registry.registerAdapter("anthropic", createMockAdapter(
-      "claude-sonnet-4-6",
-      "anthropic",
-    ));
+    registry.registerAdapter("anthropic", createMockAdapter("claude-sonnet-4-6", "anthropic"));
 
     const result = await testConnection(registry, "nonexistent");
 

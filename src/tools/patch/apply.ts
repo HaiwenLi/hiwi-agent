@@ -1,5 +1,5 @@
-import type { Hunk, UpdateFileHunk } from "./types.js";
 import { seekSequence } from "./match.js";
+import type { Hunk, UpdateFileHunk } from "./types.js";
 
 /**
  * Apply a parsed hunk to file content and return the new content.
@@ -61,11 +61,7 @@ function applyUpdate(hunk: UpdateFileHunk, content: string): string {
     }
 
     // Replace oldLines with newLines
-    lines = [
-      ...lines.slice(0, startPos),
-      ...chunk.newLines,
-      ...lines.slice(startPos + oldLen),
-    ];
+    lines = [...lines.slice(0, startPos), ...chunk.newLines, ...lines.slice(startPos + oldLen)];
   }
 
   return lines.join("\n") + (lines.length > 0 ? "\n" : "");

@@ -1,10 +1,4 @@
-import type {
-  AddFileHunk,
-  DeleteFileHunk,
-  Hunk,
-  UpdateChunk,
-  UpdateFileHunk,
-} from "./types.js";
+import type { AddFileHunk, DeleteFileHunk, Hunk, UpdateChunk, UpdateFileHunk } from "./types.js";
 
 /**
  * Parse a patch text into an array of Hunks.
@@ -144,7 +138,10 @@ export function parsePatch(patchText: string): Hunk[] {
  * Parse a @@ context @@ header, which may span multiple lines.
  * Returns the context lines between the @@ markers and the index of the closing @@ line.
  */
-function parseContextHeader(lines: string[], startIdx: number): { contextLines: string[]; endLineIdx: number } {
+function parseContextHeader(
+  lines: string[],
+  startIdx: number,
+): { contextLines: string[]; endLineIdx: number } {
   const firstLine = lines[startIdx];
 
   // Try single-line match: @@ ... @@

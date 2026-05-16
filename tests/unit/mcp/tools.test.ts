@@ -46,6 +46,13 @@ describe("MCP Tools", () => {
         ]),
         getActiveProvider: vi.fn(() => "anthropic"),
         getActiveModel: vi.fn(() => "claude-sonnet-4-6"),
+        getActiveAdapter: vi.fn(() => ({
+          id: "claude-sonnet-4-6",
+          provider: "anthropic",
+          capabilities: { tools: true, vision: true, maxTokens: 16384, contextWindow: 200000 },
+          chat: vi.fn(),
+          stream: vi.fn(),
+        })),
       } as any,
       skillExecutor: {
         execute: vi.fn(async () => ({
@@ -72,7 +79,9 @@ describe("MCP Tools", () => {
 
   it("memory_search returns results", async () => {
     const tools = createMCPTools(ctx);
-    const searchTool = tools.find((t) => t.name === "memory_search")!;
+    const searchTool = tools.find((t) => t.name === "memory_search");
+    expect(searchTool).toBeDefined();
+    if (!searchTool) throw new Error("unreachable");
     const result = await searchTool.handler({ query: "developer" });
     expect(result.content).toContain("user-profile");
     expect(result.content).toContain("Alice");
@@ -80,7 +89,9 @@ describe("MCP Tools", () => {
 
   it("memory_add saves a memory", async () => {
     const tools = createMCPTools(ctx);
-    const addTool = tools.find((t) => t.name === "memory_add")!;
+    const addTool = tools.find((t) => t.name === "memory_add");
+    expect(addTool).toBeDefined();
+    if (!addTool) throw new Error("unreachable");
     const result = await addTool.handler({
       name: "test",
       content: "Test memory",
@@ -97,14 +108,18 @@ describe("MCP Tools", () => {
 
   it("memory_get_context returns system context", async () => {
     const tools = createMCPTools(ctx);
-    const ctxTool = tools.find((t) => t.name === "memory_get_context")!;
+    const ctxTool = tools.find((t) => t.name === "memory_get_context");
+    expect(ctxTool).toBeDefined();
+    if (!ctxTool) throw new Error("unreachable");
     const result = await ctxTool.handler({});
     expect(result.content).toContain("user-profile");
   });
 
   it("skill_list lists available skills", async () => {
     const tools = createMCPTools(ctx);
-    const listTool = tools.find((t) => t.name === "skill_list")!;
+    const listTool = tools.find((t) => t.name === "skill_list");
+    expect(listTool).toBeDefined();
+    if (!listTool) throw new Error("unreachable");
     const result = await listTool.handler({});
     expect(result.content).toContain("paper-search");
   });
@@ -121,15 +136,19 @@ describe("MCP Tools", () => {
     })) as any;
 
     const tools = createMCPTools(ctx);
-    const execTool = tools.find((t) => t.name === "skill_execute")!;
+    const execTool = tools.find((t) => t.name === "skill_execute");
+    expect(execTool).toBeDefined();
+    if (!execTool) throw new Error("unreachable");
     const result = await execTool.handler({ skill: "/paper-search", input: "transformers" });
     expect(ctx.skillExecutor.execute).toHaveBeenCalled();
   });
 
   it("model_list lists models", async () => {
     const tools = createMCPTools(ctx);
-    const listTool = tools.find((t) => t.name === "model_list")!;
-    const result = await listTool.handler({});
+    const modelListTool = tools.find((t) => t.name === "model_list");
+    expect(modelListTool).toBeDefined();
+    if (!modelListTool) throw new Error("unreachable");
+    const result = await modelListTool.handler({});
     expect(result.content).toContain("claude-sonnet-4-6");
     expect(result.content).toContain("anthropic");
   });

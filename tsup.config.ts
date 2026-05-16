@@ -11,6 +11,7 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   dts: { entry: "src/index.ts" },
+  external: ["mem0ai", "mem0ai/oss"],
   banner: {
     js: "// hiwi-agent",
   },

@@ -1,4 +1,4 @@
-import { createAcademicSearchTool, type Paper } from "@/tools/academic-search.js";
+import { type Paper, createAcademicSearchTool } from "@/tools/academic-search.js";
 import type { ToolContext } from "@/types.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -48,10 +48,7 @@ describe("Academic Search Tool", () => {
       }),
     } as any);
 
-    const result = await tool.execute(
-      { query: "attention mechanism" },
-      ctx,
-    );
+    const result = await tool.execute({ query: "attention mechanism" }, ctx);
 
     expect(result.isError).toBe(false);
     expect(result.content).toContain("Attention Is All You Need");
@@ -66,10 +63,7 @@ describe("Academic Search Tool", () => {
       json: async () => ({ data: [] }),
     } as any);
 
-    const result = await tool.execute(
-      { query: "xyznonexistentquery123" },
-      ctx,
-    );
+    const result = await tool.execute({ query: "xyznonexistentquery123" }, ctx);
 
     expect(result.content).toContain("No papers found");
   });
@@ -81,10 +75,7 @@ describe("Academic Search Tool", () => {
       statusText: "Too Many Requests",
     } as any);
 
-    const result = await tool.execute(
-      { query: "test" },
-      ctx,
-    );
+    const result = await tool.execute({ query: "test" }, ctx);
 
     expect(result.content).toContain("error");
   });
@@ -100,10 +91,7 @@ describe("Academic Search Tool", () => {
       }),
     } as any);
 
-    const result = await tool.execute(
-      { query: "test", yearFrom: 2020, yearTo: 2025 },
-      ctx,
-    );
+    const result = await tool.execute({ query: "test", yearFrom: 2020, yearTo: 2025 }, ctx);
 
     expect(result.content).toContain("New Paper");
     expect(result.content).not.toContain("Old Paper");
@@ -112,10 +100,7 @@ describe("Academic Search Tool", () => {
   it("handles network error gracefully", async () => {
     fetchSpy.mockRejectedValueOnce(new Error("Connection timeout"));
 
-    const result = await tool.execute(
-      { query: "test" },
-      ctx,
-    );
+    const result = await tool.execute({ query: "test" }, ctx);
 
     expect(result.content).toContain("Error");
   });

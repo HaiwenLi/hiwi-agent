@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   convertHTMLToMarkdown,
   createWebFetchTool,
   extractTextFromHTML,
 } from "@/tools/web-fetch.js";
 import type { Tool, ToolContext } from "@/types.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const SAMPLE_HTML = `<!DOCTYPE html>
 <html>
@@ -61,10 +61,7 @@ describe("web_fetch tool", () => {
   });
 
   it("fetches and returns content", async () => {
-    vi.stubGlobal(
-      "fetch",
-      () => Promise.resolve(mockFetchResponse("<p>Hello</p>")),
-    );
+    vi.stubGlobal("fetch", () => Promise.resolve(mockFetchResponse("<p>Hello</p>")));
 
     const result = await tool.execute({ url: "https://example.com" }, ctx);
     expect(result.isError).toBe(false);
@@ -72,9 +69,8 @@ describe("web_fetch tool", () => {
   });
 
   it("converts HTML to markdown by default", async () => {
-    vi.stubGlobal(
-      "fetch",
-      () => Promise.resolve(mockFetchResponse("<h1>Title</h1><p>Paragraph</p>")),
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(mockFetchResponse("<h1>Title</h1><p>Paragraph</p>")),
     );
 
     const result = await tool.execute({ url: "https://example.com" }, ctx);
@@ -84,15 +80,9 @@ describe("web_fetch tool", () => {
   });
 
   it("returns raw text when format=text", async () => {
-    vi.stubGlobal(
-      "fetch",
-      () => Promise.resolve(mockFetchResponse(SAMPLE_HTML)),
-    );
+    vi.stubGlobal("fetch", () => Promise.resolve(mockFetchResponse(SAMPLE_HTML)));
 
-    const result = await tool.execute(
-      { url: "https://example.com", format: "text" },
-      ctx,
-    );
+    const result = await tool.execute({ url: "https://example.com", format: "text" }, ctx);
     expect(result.isError).toBe(false);
     expect(result.content).not.toContain("<");
     expect(result.content).not.toContain("var x = 1");
@@ -103,27 +93,17 @@ describe("web_fetch tool", () => {
   });
 
   it("returns raw HTML when format=html", async () => {
-    vi.stubGlobal(
-      "fetch",
-      () => Promise.resolve(mockFetchResponse("<h1>Title</h1>")),
-    );
+    vi.stubGlobal("fetch", () => Promise.resolve(mockFetchResponse("<h1>Title</h1>")));
 
-    const result = await tool.execute(
-      { url: "https://example.com", format: "html" },
-      ctx,
-    );
+    const result = await tool.execute({ url: "https://example.com", format: "html" }, ctx);
     expect(result.isError).toBe(false);
     expect(result.content).toContain("<h1>Title</h1>");
   });
 
   it("returns error for responses exceeding 5MB via content-length", async () => {
     const sixMB = 6 * 1024 * 1024;
-    vi.stubGlobal(
-      "fetch",
-      () =>
-        Promise.resolve(
-          mockFetchResponse("x", { contentLength: String(sixMB) }),
-        ),
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(mockFetchResponse("x", { contentLength: String(sixMB) })),
     );
 
     const result = await tool.execute({ url: "https://example.com/big" }, ctx);
@@ -134,10 +114,7 @@ describe("web_fetch tool", () => {
   it("returns error for responses exceeding 5MB via body length", async () => {
     // Create a body larger than 5MB
     const bigBody = "x".repeat(5 * 1024 * 1024 + 1);
-    vi.stubGlobal(
-      "fetch",
-      () => Promise.resolve(mockFetchResponse(bigBody)),
-    );
+    vi.stubGlobal("fetch", () => Promise.resolve(mockFetchResponse(bigBody)));
 
     const result = await tool.execute({ url: "https://example.com/big" }, ctx);
     expect(result.isError).toBe(true);
@@ -145,60 +122,35 @@ describe("web_fetch tool", () => {
   });
 
   it("returns error on HTTP failure (404)", async () => {
-    vi.stubGlobal(
-      "fetch",
-      () => Promise.resolve(mockFetchResponse("Not Found", { status: 404 })),
-    );
+    vi.stubGlobal("fetch", () => Promise.resolve(mockFetchResponse("Not Found", { status: 404 })));
 
-    const result = await tool.execute(
-      { url: "https://example.com/missing" },
-      ctx,
-    );
+    const result = await tool.execute({ url: "https://example.com/missing" }, ctx);
     expect(result.isError).toBe(true);
     expect(result.content).toContain("404");
   });
 
   it("handles timeout (AbortError)", async () => {
     const abortError = new DOMException("The operation was aborted", "AbortError");
-    vi.stubGlobal(
-      "fetch",
-      () => Promise.reject(abortError),
-    );
+    vi.stubGlobal("fetch", () => Promise.reject(abortError));
 
-    const result = await tool.execute(
-      { url: "https://example.com", timeout: 1 },
-      ctx,
-    );
+    const result = await tool.execute({ url: "https://example.com", timeout: 1 }, ctx);
     expect(result.isError).toBe(true);
     expect(result.content).toMatch(/timeout|abort/i);
   });
 
   it("returns title with hostname", async () => {
-    vi.stubGlobal(
-      "fetch",
-      () => Promise.resolve(mockFetchResponse("<p>Hi</p>")),
-    );
+    vi.stubGlobal("fetch", () => Promise.resolve(mockFetchResponse("<p>Hi</p>")));
 
-    const result = await tool.execute(
-      { url: "https://example.com/page" },
-      ctx,
-    );
+    const result = await tool.execute({ url: "https://example.com/page" }, ctx);
     expect(result.title).toContain("example.com");
   });
 
   it("shows placeholder for image content types", async () => {
-    vi.stubGlobal(
-      "fetch",
-      () =>
-        Promise.resolve(
-          mockFetchResponse("", { contentType: "image/png" }),
-        ),
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(mockFetchResponse("", { contentType: "image/png" })),
     );
 
-    const result = await tool.execute(
-      { url: "https://example.com/img.png" },
-      ctx,
-    );
+    const result = await tool.execute({ url: "https://example.com/img.png" }, ctx);
     expect(result.isError).toBe(false);
     expect(result.content).toMatch(/image/i);
   });
@@ -214,8 +166,7 @@ describe("convertHTMLToMarkdown", () => {
   });
 
   it("removes script and style tags", () => {
-    const html =
-      "<p>Content</p><script>alert('x')</script><style>body{}</style>";
+    const html = "<p>Content</p><script>alert('x')</script><style>body{}</style>";
     const md = convertHTMLToMarkdown(html);
     expect(md).toContain("Content");
     expect(md).not.toContain("alert");

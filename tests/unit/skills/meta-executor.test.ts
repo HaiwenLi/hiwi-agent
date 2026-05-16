@@ -1,9 +1,13 @@
 import type { Skill } from "@/skills/loader.js";
-import { MetaExecutor, type MetaAction } from "@/skills/meta-executor.js";
+import { type MetaAction, MetaExecutor } from "@/skills/meta-executor.js";
 import { SkillRegistry } from "@/skills/registry.js";
 import { beforeEach, describe, expect, it } from "vitest";
 
-function createSkill(name: string, trigger: string, type: "domain" | "workflow" | "meta" = "domain"): Skill {
+function createSkill(
+  name: string,
+  trigger: string,
+  type: "domain" | "workflow" | "meta" = "domain",
+): Skill {
   return {
     name,
     trigger,

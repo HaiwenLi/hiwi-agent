@@ -5,7 +5,8 @@ import type { Tool, ToolContext, ToolResult } from "../types.js";
 export function createWriteTool(): Tool {
   return {
     name: "write_file",
-    description: "Write content to a file on the local filesystem. Creates parent directories if needed. Overwrites existing files.",
+    description:
+      "Write content to a file on the local filesystem. Creates parent directories if needed. Overwrites existing files.",
     inputSchema: {
       type: "object",
       properties: {

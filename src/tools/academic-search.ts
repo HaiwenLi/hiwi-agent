@@ -54,7 +54,7 @@ export function createAcademicSearchTool(): Tool {
           };
         }
 
-        const data = await response.json() as {
+        const data = (await response.json()) as {
           data?: Array<{
             paperId: string;
             title: string;

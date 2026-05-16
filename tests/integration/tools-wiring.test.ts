@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { registerCoreTools, registerExtraTools } from "@/tools/index.js";
 import { ToolRegistry } from "@/core/tools.js";
+import { registerCoreTools, registerExtraTools } from "@/tools/index.js";
+import { describe, expect, it } from "vitest";
 
 describe("core tools registration", () => {
   it("registers all 6 core tools", () => {
@@ -38,24 +38,26 @@ describe("core tools registration", () => {
 
     const readDef = defs.find((d) => d.name === "read_file");
     expect(readDef).toBeDefined();
-    expect((readDef!.inputSchema as any).properties.path).toBeDefined();
+    expect((readDef?.inputSchema as any).properties.path).toBeDefined();
   });
 });
 
 describe("extra tools registration", () => {
-  it("registers all 7 extra tools", () => {
+  it("registers all 9 extra tools", () => {
     const registry = new ToolRegistry();
     registerExtraTools(registry);
     const names = registry.list().map((t) => t.name);
 
+    expect(names).toContain("academic_search");
     expect(names).toContain("apply_patch");
+    expect(names).toContain("git");
     expect(names).toContain("web_fetch");
     expect(names).toContain("web_search");
     expect(names).toContain("repo_overview");
     expect(names).toContain("question");
     expect(names).toContain("todo");
     expect(names).toContain("lsp");
-    expect(names).toHaveLength(7);
+    expect(names).toHaveLength(9);
   });
 
   it("all extra tools have valid schemas", () => {
@@ -73,23 +75,23 @@ describe("extra tools registration", () => {
 });
 
 describe("combined tools registration", () => {
-  it("registers all 13 tools together without conflicts", () => {
+  it("registers all 15 tools together without conflicts", () => {
     const registry = new ToolRegistry();
     registerCoreTools(registry);
     registerExtraTools(registry);
     const names = registry.list().map((t) => t.name);
 
-    expect(names).toHaveLength(13);
+    expect(names).toHaveLength(15);
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it("all 13 tools produce valid tool definitions for model", () => {
+  it("all 15 tools produce valid tool definitions for model", () => {
     const registry = new ToolRegistry();
     registerCoreTools(registry);
     registerExtraTools(registry);
     const defs = registry.toToolDefinitions();
 
-    expect(defs).toHaveLength(13);
+    expect(defs).toHaveLength(15);
     for (const def of defs) {
       expect(def.name).toBeTruthy();
       expect(def.description).toBeTruthy();

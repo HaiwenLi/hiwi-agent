@@ -20,7 +20,7 @@ export async function testConnection(
 ): Promise<ConnectionTestResult> {
   const provider = providerName ?? registry.getActiveProvider();
 
-  let adapter;
+  let adapter: import("../types.js").ModelAdapter;
   try {
     adapter = registry.getAdapter(provider);
   } catch (err) {

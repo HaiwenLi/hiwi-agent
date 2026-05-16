@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
 import { seekSequence } from "@/tools/patch/match.js";
+import { describe, expect, it } from "vitest";
 
 describe("seekSequence", () => {
   it("returns 0 for empty needle", () => {
@@ -34,11 +34,11 @@ describe("seekSequence", () => {
   it("matches with unicode normalization (smart quotes to straight quotes)", () => {
     // Smart single quotes: ‘ (left) and ’ (right)
     // Smart double quotes: “ (left) and ” (right)
-    expect(seekSequence(["it’s a “test”"], ["it's a \"test\""])).toBe(0);
+    expect(seekSequence(["it’s a “test”"], ['it\'s a "test"'])).toBe(0);
   });
 
   it("matches when needle has straight quotes and haystack has smart quotes", () => {
-    expect(seekSequence(["it's a \"test\""], ["it’s a “test”"])).toBe(0);
+    expect(seekSequence(['it\'s a "test"'], ["it’s a “test”"])).toBe(0);
   });
 
   it("returns -1 when content differs beyond whitespace", () => {

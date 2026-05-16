@@ -52,6 +52,18 @@ export {
   type CompactOptions,
   type CompactResult,
 } from "./memory/compaction.js";
+export {
+  AutoExtractor,
+  type ExtractedFact,
+  type AutoExtractorOptions,
+} from "./memory/auto-extract.js";
+export {
+  SessionSummarizer,
+  type SessionSummary as SessionSummaryGenerated,
+} from "./memory/session-summary.js";
+export { EntityLinker, type Entity, type LinkedMemories } from "./memory/entity-link.js";
+export { KnowledgeBase, type KnowledgeEntry } from "./memory/knowledge-base.js";
+export { UserProfileManager, type UserProfile } from "./memory/user-profile.js";
 
 // Skills
 export { SkillLoader, type Skill } from "./skills/loader.js";

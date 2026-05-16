@@ -1,5 +1,5 @@
 import { type Result, err, ok } from "neverthrow";
-import type { SkillExecutor, SkillExecuteOptions, SkillExecuteResult } from "./executor.js";
+import type { SkillExecuteOptions, SkillExecuteResult, SkillExecutor } from "./executor.js";
 
 export interface WorkflowStep {
   skill: string;
@@ -50,6 +50,7 @@ export class SkillComposer {
       // Extract text output for next step
       const texts = result.value.events
         .filter((e) => e.type === "text-delta" && e.text)
+        // biome-ignore lint/style/noNonNullAssertion: filtered above
         .map((e) => e.text!);
       previousOutput = texts.join("") || previousOutput;
     }

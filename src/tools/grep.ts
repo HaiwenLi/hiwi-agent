@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
 import type { Tool, ToolContext, ToolResult } from "../types.js";
 
@@ -15,7 +15,7 @@ async function walkFiles(dir: string, includeRegex: RegExp | null): Promise<stri
   const results: string[] = [];
 
   async function walk(current: string): Promise<void> {
-    let entries;
+    let entries: Dirent[];
     try {
       entries = await fs.readdir(current, { withFileTypes: true });
     } catch {
@@ -25,7 +25,8 @@ async function walkFiles(dir: string, includeRegex: RegExp | null): Promise<stri
     for (const entry of entries) {
       const fullPath = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "dist") continue;
+        if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "dist")
+          continue;
         await walk(fullPath);
       } else if (includeRegex ? includeRegex.test(entry.name) : true) {
         results.push(fullPath);
@@ -38,30 +39,35 @@ async function walkFiles(dir: string, includeRegex: RegExp | null): Promise<stri
 }
 
 function globToRegex(pattern: string): RegExp {
-  const regex = pattern
-    .replace(/\./g, "\\.")
-    .replace(/\*/g, ".*")
-    .replace(/\?/g, ".");
+  const regex = pattern.replace(/\./g, "\\.").replace(/\*/g, ".*").replace(/\?/g, ".");
   return new RegExp(`^${regex}$`);
 }
 
 export function createGrepTool(): Tool {
   return {
     name: "grep",
-    description: "Search file contents using regex. Returns matching lines with file paths and line numbers. Filter by file pattern with include parameter.",
+    description:
+      "Search file contents using regex. Returns matching lines with file paths and line numbers. Filter by file pattern with include parameter.",
     inputSchema: {
       type: "object",
       properties: {
         pattern: { type: "string", description: "Regular expression pattern to search for" },
         include: { type: "string", description: 'File glob filter (e.g., "*.ts", "*.{js,jsx}")' },
-        path: { type: "string", description: "Directory to search in (defaults to workingDirectory)" },
+        path: {
+          type: "string",
+          description: "Directory to search in (defaults to workingDirectory)",
+        },
       },
       required: ["pattern"],
     },
     capabilities: ["ReadOnly"],
 
     async execute(input: unknown, ctx: ToolContext): Promise<ToolResult> {
-      const { pattern, include, path: searchPath } = input as {
+      const {
+        pattern,
+        include,
+        path: searchPath,
+      } = input as {
         pattern: string;
         include?: string;
         path?: string;
@@ -98,9 +104,10 @@ export function createGrepTool(): Tool {
             for (let i = 0; i < lines.length; i++) {
               if (matches.length >= MAX_RESULTS) break;
               if (searchRegex.test(lines[i])) {
-                const truncated = lines[i].length > MAX_LINE_LENGTH
-                  ? lines[i].slice(0, MAX_LINE_LENGTH) + "..."
-                  : lines[i];
+                const truncated =
+                  lines[i].length > MAX_LINE_LENGTH
+                    ? `${lines[i].slice(0, MAX_LINE_LENGTH)}...`
+                    : lines[i];
                 matches.push({ filePath, lineNumber: i + 1, line: truncated });
               }
             }
@@ -120,9 +127,7 @@ export function createGrepTool(): Tool {
         }
 
         const truncated = matches.length >= MAX_RESULTS;
-        const lines = matches.map(
-          (m) => `${m.filePath}:${m.lineNumber}: ${m.line}`,
-        );
+        const lines = matches.map((m) => `${m.filePath}:${m.lineNumber}: ${m.line}`);
 
         const content = truncated
           ? `${lines.join("\n")}\n... (showing first ${MAX_RESULTS} matches)`

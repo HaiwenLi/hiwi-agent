@@ -1,13 +1,13 @@
-import { describe, expect, it } from "vitest";
 import {
-  buildRequest,
   buildNotification,
-  parseResponse,
+  buildRequest,
   encodeMessage,
   filePathToUri,
-  toLspPosition,
+  parseResponse,
   resetNextId,
+  toLspPosition,
 } from "@/tools/lsp/client.js";
+import { describe, expect, it } from "vitest";
 
 describe("LSP JSON-RPC client", () => {
   describe("buildRequest", () => {

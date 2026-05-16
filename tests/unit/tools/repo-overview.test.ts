@@ -1,9 +1,9 @@
+import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { promises as fs } from "node:fs";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createRepoOverviewTool } from "@/tools/repo-overview.js";
 import type { Tool, ToolContext } from "@/types.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 describe("repo_overview tool", () => {
   let tempDir: string;
@@ -48,10 +48,7 @@ describe("repo_overview tool", () => {
   });
 
   it("detects Go ecosystem from go.mod", async () => {
-    await fs.writeFile(
-      path.join(tempDir, "go.mod"),
-      "module example.com/test\ngo 1.21\n",
-    );
+    await fs.writeFile(path.join(tempDir, "go.mod"), "module example.com/test\ngo 1.21\n");
 
     const result = await tool.execute({}, ctx);
     expect(result.isError).toBe(false);

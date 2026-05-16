@@ -1,7 +1,7 @@
 import type { MatchResult, Replacer } from "./strategy.js";
 
 function normalizeSpaces(text: string): string {
-  return text.replace(/  +/g, " ");
+  return text.replace(/ {2,}/g, " ");
 }
 
 export const whitespaceNormReplacer: Replacer = (content, oldString) => {

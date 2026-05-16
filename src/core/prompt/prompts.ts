@@ -59,6 +59,7 @@ export function selectBasePrompt(modelId: string): string {
   if (modelId === "gpt") return GPT_PROMPT;
   if (modelId === "default") return DEFAULT_PROMPT;
   if (modelId.includes("claude")) return ANTHROPIC_PROMPT;
-  if (modelId.includes("gpt") || modelId.includes("o1") || modelId.includes("o3")) return GPT_PROMPT;
+  if (modelId.includes("gpt") || modelId.includes("o1") || modelId.includes("o3"))
+    return GPT_PROMPT;
   return DEFAULT_PROMPT;
 }

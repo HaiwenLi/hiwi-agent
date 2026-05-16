@@ -1,6 +1,6 @@
-import type { Tool, ToolContext, ToolResult } from "../types.js";
 import { todoStore } from "../core/todo-store.js";
 import type { TodoItem } from "../core/todo-store.js";
+import type { Tool, ToolContext, ToolResult } from "../types.js";
 
 export function createTodoTool(): Tool {
   return {
@@ -71,9 +71,7 @@ export function createTodoTool(): Tool {
       todoStore.set(ctx.sessionId, normalized);
 
       // Format output lines: [status] (priority) content
-      const lines = normalized.map(
-        (t) => `[${t.status}] (${t.priority}) ${t.content}`,
-      );
+      const lines = normalized.map((t) => `[${t.status}] (${t.priority}) ${t.content}`);
 
       // Count pending items (not completed, not cancelled)
       const pendingCount = normalized.filter(

@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebSearchTool, formatSearchResults } from "@/tools/web-search.js";
 import type { Tool, ToolContext } from "@/types.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockResults = [
   { title: "Result One", url: "https://example.com/1", text: "First result snippet" },
@@ -34,10 +34,7 @@ describe("web_search tool", () => {
   });
 
   it("searches and returns formatted results", async () => {
-    vi.stubGlobal(
-      "fetch",
-      () => Promise.resolve(mockFetchResponse({ results: mockResults })),
-    );
+    vi.stubGlobal("fetch", () => Promise.resolve(mockFetchResponse({ results: mockResults })));
 
     const result = await tool.execute({ query: "test query" }, ctx);
     expect(result.isError).toBe(false);
@@ -47,9 +44,7 @@ describe("web_search tool", () => {
   });
 
   it("sends query in request body", async () => {
-    const fetchSpy = vi.fn(() =>
-      Promise.resolve(mockFetchResponse({ results: [] })),
-    );
+    const fetchSpy = vi.fn(() => Promise.resolve(mockFetchResponse({ results: [] })));
     vi.stubGlobal("fetch", fetchSpy);
 
     await tool.execute({ query: "hello world" }, ctx);
@@ -61,9 +56,7 @@ describe("web_search tool", () => {
   });
 
   it("respects numResults parameter", async () => {
-    const fetchSpy = vi.fn(() =>
-      Promise.resolve(mockFetchResponse({ results: [] })),
-    );
+    const fetchSpy = vi.fn(() => Promise.resolve(mockFetchResponse({ results: [] })));
     vi.stubGlobal("fetch", fetchSpy);
 
     await tool.execute({ query: "test", numResults: 5 }, ctx);
@@ -74,10 +67,7 @@ describe("web_search tool", () => {
   });
 
   it("returns message when no results found", async () => {
-    vi.stubGlobal(
-      "fetch",
-      () => Promise.resolve(mockFetchResponse({ results: [] })),
-    );
+    vi.stubGlobal("fetch", () => Promise.resolve(mockFetchResponse({ results: [] })));
 
     const result = await tool.execute({ query: "obscure query" }, ctx);
     expect(result.isError).toBe(false);
@@ -85,9 +75,8 @@ describe("web_search tool", () => {
   });
 
   it("handles API errors (500 response)", async () => {
-    vi.stubGlobal(
-      "fetch",
-      () => Promise.resolve(mockFetchResponse({ error: "Internal Server Error" }, 500)),
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(mockFetchResponse({ error: "Internal Server Error" }, 500)),
     );
 
     const result = await tool.execute({ query: "test" }, ctx);
@@ -96,10 +85,7 @@ describe("web_search tool", () => {
   });
 
   it("handles network errors (rejected promise)", async () => {
-    vi.stubGlobal(
-      "fetch",
-      () => Promise.reject(new Error("Network connection failed")),
-    );
+    vi.stubGlobal("fetch", () => Promise.reject(new Error("Network connection failed")));
 
     const result = await tool.execute({ query: "test" }, ctx);
     expect(result.isError).toBe(true);
@@ -113,9 +99,7 @@ describe("web_search tool", () => {
   });
 
   it("uses search URL from env when HIWI_SEARCH_URL is set", async () => {
-    const fetchSpy = vi.fn(() =>
-      Promise.resolve(mockFetchResponse({ results: [] })),
-    );
+    const fetchSpy = vi.fn(() => Promise.resolve(mockFetchResponse({ results: [] })));
     vi.stubGlobal("fetch", fetchSpy);
     vi.stubEnv("HIWI_SEARCH_URL", "https://custom.search.api/v1/search");
 

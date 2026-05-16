@@ -58,7 +58,7 @@ describe("Integration: CLI + MCP", () => {
       } as any,
     });
 
-    const listResult = await mcpTools.find((t) => t.name === "skill_list")!.handler({});
+    const listResult = await mcpTools.find((t) => t.name === "skill_list")?.handler({});
     expect(listResult.content).toContain("/echo");
   });
 

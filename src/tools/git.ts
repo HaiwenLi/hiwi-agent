@@ -58,15 +58,18 @@ export function parseGitStatus(output: string): GitStatus {
 export function parseGitLog(output: string): GitLogEntry[] {
   if (!output.trim()) return [];
 
-  return output.trim().split("\n").map((line) => {
-    const [hash, ...rest] = line.split(" ");
-    return {
-      hash,
-      author: "",
-      date: "",
-      message: rest.join(" "),
-    };
-  });
+  return output
+    .trim()
+    .split("\n")
+    .map((line) => {
+      const [hash, ...rest] = line.split(" ");
+      return {
+        hash,
+        author: "",
+        date: "",
+        message: rest.join(" "),
+      };
+    });
 }
 
 export function createGitTool(): Tool {
@@ -109,13 +112,19 @@ export function createGitTool(): Tool {
           case "status": {
             const output = execSync("git status --porcelain=v2 --branch", execOpts);
             const status = parseGitStatus(output);
-            const lines: string[] = [
+            const lines: (string | null)[] = [
               `Branch: ${status.branch}`,
               status.ahead ? `Ahead: ${status.ahead}` : null,
               status.behind ? `Behind: ${status.behind}` : null,
-              status.staged.length ? `\nStaged:\n${status.staged.map((f) => `  + ${f}`).join("\n")}` : null,
-              status.unstaged.length ? `\nUnstaged:\n${status.unstaged.map((f) => `  ~ ${f}`).join("\n")}` : null,
-              status.untracked.length ? `\nUntracked:\n${status.untracked.map((f) => `  ? ${f}`).join("\n")}` : null,
+              status.staged.length
+                ? `\nStaged:\n${status.staged.map((f) => `  + ${f}`).join("\n")}`
+                : null,
+              status.unstaged.length
+                ? `\nUnstaged:\n${status.unstaged.map((f) => `  ~ ${f}`).join("\n")}`
+                : null,
+              status.untracked.length
+                ? `\nUntracked:\n${status.untracked.map((f) => `  ? ${f}`).join("\n")}`
+                : null,
             ];
             return {
               toolCallId: "",

@@ -1,4 +1,5 @@
 import { type Result, err, ok } from "neverthrow";
+import { EntityLinker } from "./entity-link.js";
 import type { MemoryEntry, MemoryFileStore } from "./file-store.js";
 import type { Mem0Client } from "./mem0-client.js";
 
@@ -14,15 +15,22 @@ export interface MergedMemoryResult {
   content: string;
   score: number;
   source: "file" | "mem0";
+  related?: Array<{
+    memory: MemoryEntry;
+    sharedEntities: string[];
+    relevanceScore: number;
+  }>;
 }
 
 export class MemoryManager {
   private fileStore: MemoryFileStore;
   private mem0: Mem0Client;
+  private entityLinker: EntityLinker;
 
   constructor(fileStore: MemoryFileStore, mem0: Mem0Client) {
     this.fileStore = fileStore;
     this.mem0 = mem0;
+    this.entityLinker = new EntityLinker(fileStore);
   }
 
   async remember(
@@ -33,6 +41,7 @@ export class MemoryManager {
   ): Promise<Result<boolean, Error>> {
     try {
       await this.fileStore.write(name, type, description, content);
+      this.entityLinker.updateIndex(name, content).catch(() => {});
 
       if (this.mem0.isConnected()) {
         await this.mem0.add([{ role: "user", content }], { metadata: { name, type, description } });
@@ -118,6 +127,7 @@ export class MemoryManager {
         return err(new Error(`Memory not found: ${name}`));
       }
       await this.fileStore.delete(name);
+      this.entityLinker.removeFromIndex(name).catch(() => {});
       return ok(true);
     } catch (error) {
       return err(

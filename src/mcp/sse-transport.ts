@@ -1,6 +1,6 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import { Socket } from "node:net";
+import type { Socket } from "node:net";
 
 export interface JSONRPCMessage {
   jsonrpc: "2.0";
@@ -22,12 +22,15 @@ export class SSETransport {
     this.host = options?.host ?? "127.0.0.1";
   }
 
-  async start(
-    handler: (message: JSONRPCMessage) => Promise<JSONRPCMessage>,
-  ): Promise<void> {
+  async start(handler: (message: JSONRPCMessage) => Promise<JSONRPCMessage>): Promise<void> {
     return new Promise((resolve, reject) => {
       this.server = http.createServer((req, res) => {
-        const url = new URL(req.url!, `http://${this.host}:${this.port}`);
+        if (!req.url) {
+          res.writeHead(400);
+          res.end();
+          return;
+        }
+        const url = new URL(req.url, `http://${this.host}:${this.port}`);
 
         if (req.method === "GET" && url.pathname === "/sse") {
           this.handleSSE(res);
@@ -44,10 +47,20 @@ export class SSETransport {
         socket.on("close", () => this.activeSockets.delete(socket));
       });
 
-      this.server.on("error", reject);
+      this.server.on("error", (err: NodeJS.ErrnoException) => {
+        if (err.code === "EADDRINUSE") {
+          reject(
+            new Error(
+              `Port ${this.port} is already in use. Specify a different port with --port <number>.`,
+            ),
+          );
+        } else {
+          reject(err);
+        }
+      });
 
       this.server.listen(this.port, this.host, () => {
-        const addr = this.server!.address() as AddressInfo;
+        const addr = this.server?.address() as AddressInfo;
         if (addr && typeof addr === "object") {
           this.port = addr.port;
         }

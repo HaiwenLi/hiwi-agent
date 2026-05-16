@@ -7,18 +7,9 @@ export interface TodoItem {
   priority: "high" | "medium" | "low";
 }
 
-export const VALID_STATUSES = new Set<string>([
-  "pending",
-  "in_progress",
-  "completed",
-  "cancelled",
-]);
+export const VALID_STATUSES = new Set<string>(["pending", "in_progress", "completed", "cancelled"]);
 
-export const VALID_PRIORITIES = new Set<string>([
-  "high",
-  "medium",
-  "low",
-]);
+export const VALID_PRIORITIES = new Set<string>(["high", "medium", "low"]);
 
 // Map from sessionId to that session's todo list
 const store = new Map<string, TodoItem[]>();

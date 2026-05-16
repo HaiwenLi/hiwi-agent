@@ -1,7 +1,8 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { type MCPToolContext, createMCPTools } from "./tools.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { type JSONRPCMessage, SSETransport } from "./sse-transport.js";
+import { type MCPToolContext, createMCPTools } from "./tools.js";
 
 export interface MCPServerOptions {
   transport?: "stdio" | "sse";
@@ -29,7 +30,7 @@ export class MCPServer {
   }
 
   private setupHandlers(): void {
-    this.server.setRequestHandler({ method: "tools/list" } as any, async () => ({
+    this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: this.tools.map((t) => ({
         name: t.name,
         description: t.description,
@@ -37,7 +38,7 @@ export class MCPServer {
       })),
     }));
 
-    this.server.setRequestHandler({ method: "tools/call" } as any, async (request: any) => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const toolName = request.params.name;
       const toolArgs = request.params.arguments ?? {};
 
@@ -89,9 +90,7 @@ export class MCPServer {
     }
   }
 
-  private async handleJSONRPCMessage(
-    msg: JSONRPCMessage,
-  ): Promise<JSONRPCMessage> {
+  private async handleJSONRPCMessage(msg: JSONRPCMessage): Promise<JSONRPCMessage> {
     const method = msg.method;
 
     if (method === "tools/list") {
@@ -109,7 +108,9 @@ export class MCPServer {
     }
 
     if (method === "tools/call") {
-      const params = msg.params as { name?: string; arguments?: Record<string, unknown> } | undefined;
+      const params = msg.params as
+        | { name?: string; arguments?: Record<string, unknown> }
+        | undefined;
       const toolName = params?.name;
       const toolArgs = params?.arguments ?? {};
 

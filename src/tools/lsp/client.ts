@@ -31,11 +31,7 @@ export function resetNextId(): void {
 
 // ─── Message Builders ──────────────────────────────────────────
 
-export function buildRequest(
-  method: string,
-  params: unknown,
-  id?: number,
-): JsonRpcRequest {
+export function buildRequest(method: string, params: unknown, id?: number): JsonRpcRequest {
   return {
     jsonrpc: "2.0",
     id: id ?? nextId++,
@@ -44,10 +40,7 @@ export function buildRequest(
   };
 }
 
-export function buildNotification(
-  method: string,
-  params: unknown,
-): JsonRpcNotification {
+export function buildNotification(method: string, params: unknown): JsonRpcNotification {
   return {
     jsonrpc: "2.0",
     method,
@@ -72,7 +65,7 @@ export function parseResponse(raw: string): JsonRpcResponse | null {
   const match = headerPart.match(/Content-Length:\s*(\d+)/i);
   if (!match) return null;
 
-  const contentLength = parseInt(match[1], 10);
+  const contentLength = Number.parseInt(match[1], 10);
   const bodyStart = headerEnd + 4;
   const body = raw.slice(bodyStart);
 
@@ -112,7 +105,10 @@ export function filePathToUri(filePath: string): string {
 /**
  * Convert 1-based (line, character) to 0-based LSP Position.
  */
-export function toLspPosition(line: number, character: number): {
+export function toLspPosition(
+  line: number,
+  character: number,
+): {
   line: number;
   character: number;
 } {

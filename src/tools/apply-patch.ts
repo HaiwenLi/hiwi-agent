@@ -1,8 +1,8 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Tool, ToolResult } from "../types.js";
-import { parsePatch } from "./patch/parser.js";
 import { applyHunk } from "./patch/apply.js";
+import { parsePatch } from "./patch/parser.js";
 import type { Hunk } from "./patch/types.js";
 
 export function createApplyPatchTool(): Tool {
@@ -90,9 +90,7 @@ export function createApplyPatchTool(): Tool {
             }
           }
         } catch (err) {
-          errors.push(
-            `${hunk.path}: ${err instanceof Error ? err.message : String(err)}`,
-          );
+          errors.push(`${hunk.path}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 

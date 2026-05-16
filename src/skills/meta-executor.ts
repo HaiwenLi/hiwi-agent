@@ -17,9 +17,7 @@ export class MetaExecutor {
       case "list-skills": {
         const skills = this.skillRegistry.list();
         if (skills.length === 0) return "No skills registered.";
-        return skills
-          .map((s) => `${s.trigger} — ${s.description} [${s.type}]`)
-          .join("\n");
+        return skills.map((s) => `${s.trigger} — ${s.description} [${s.type}]`).join("\n");
       }
       case "remove-skill": {
         const skill = this.skillRegistry.getByName(action.name);
@@ -38,7 +36,7 @@ export class MetaExecutor {
         return `Self-improvement feedback recorded: ${action.feedback.slice(0, 100)}`;
       }
       default: {
-        throw new Error(`Unknown meta action: ${(action as any).type}`);
+        throw new Error(`Unknown meta action: ${(action as { type: string }).type}`);
       }
     }
   }

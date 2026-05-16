@@ -1,4 +1,4 @@
-import { ZhipuAdapter, ZHIPU_MODELS } from "@/adapters/zhipu.js";
+import { ZHIPU_MODELS, ZhipuAdapter } from "@/adapters/zhipu.js";
 import type { Message } from "@/types.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

@@ -5,12 +5,15 @@ import type {
   ModelAdapter,
   ModelCapabilities,
   StreamChunk,
+  ToolCall,
+  ToolDefinition,
 } from "../types.js";
 
 export const ZHIPU_MODELS: Record<string, ModelCapabilities> = {
   "glm-4-plus": { tools: true, vision: true, maxTokens: 4096, contextWindow: 128_000 },
   "glm-4-flash": { tools: true, vision: false, maxTokens: 4096, contextWindow: 128_000 },
   "glm-4": { tools: true, vision: true, maxTokens: 4096, contextWindow: 128_000 },
+  "glm-4.7": { tools: true, vision: true, maxTokens: 4096, contextWindow: 128_000 },
   "glm-4v": { tools: false, vision: true, maxTokens: 4096, contextWindow: 8_192 },
   "glm-3-turbo": { tools: true, vision: false, maxTokens: 4096, contextWindow: 32_000 },
 };
@@ -37,48 +40,68 @@ export class ZhipuAdapter implements ModelAdapter {
     this.capabilities = ZHIPU_MODELS[this.id] ?? ZHIPU_MODELS[DEFAULT_MODEL];
   }
 
-  async chat(messages: Message[], _options?: ChatOptions): Promise<ChatResponse> {
+  async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const body: Record<string, unknown> = {
+      model: options?.model ?? this.id,
+      messages: this.convertMessages(messages),
+      max_tokens: options?.maxTokens ?? this.capabilities.maxTokens,
+      temperature: options?.temperature ?? 0.7,
+    };
+    if (options?.tools?.length) {
+      body.tools = this.convertTools(options.tools);
+    }
+
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`,
       },
-      body: JSON.stringify({
-        model: this.id,
-        messages: messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-        max_tokens: _options?.maxTokens ?? this.capabilities.maxTokens,
-        temperature: _options?.temperature ?? 0.7,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
       let errorCode = "";
       let errorMsg = "";
       try {
-        const errBody = await response.json() as { error?: { code?: string; message?: string } };
+        const errBody = (await response.json()) as { error?: { code?: string; message?: string } };
         errorCode = errBody.error?.code ?? "";
         errorMsg = errBody.error?.message ?? "";
       } catch {
         // ignore parse errors
       }
-
       const friendly = GLM_ERROR_MAP[errorCode];
-      throw new Error(friendly ?? `Zhipu API error (${response.status}): ${errorMsg || "Unknown error"}`);
+      throw new Error(
+        friendly ?? `Zhipu API error (${response.status}): ${errorMsg || "Unknown error"}`,
+      );
     }
 
-    const data = await response.json() as {
-      choices: Array<{ message: { content: string } }>;
+    const data = (await response.json()) as {
+      choices: Array<{
+        message: {
+          content?: string;
+          tool_calls?: Array<{
+            id: string;
+            type: string;
+            function: { name: string; arguments: string };
+          }>;
+        };
+        finish_reason: string;
+      }>;
       usage?: { prompt_tokens: number; completion_tokens: number };
     };
 
+    const choice = data.choices[0];
+    const toolCalls: ToolCall[] = (choice?.message?.tool_calls ?? []).map((tc) => ({
+      id: tc.id,
+      name: tc.function.name,
+      input: JSON.parse(tc.function.arguments),
+    }));
+
     return {
-      content: data.choices[0]?.message?.content ?? "",
-      toolCalls: [],
-      finishReason: "stop",
+      content: choice?.message?.content ?? "",
+      toolCalls,
+      finishReason: choice?.finish_reason === "tool_calls" ? "tool-calls" : "stop",
       usage: {
         inputTokens: data.usage?.prompt_tokens ?? 0,
         outputTokens: data.usage?.completion_tokens ?? 0,
@@ -86,29 +109,44 @@ export class ZhipuAdapter implements ModelAdapter {
     };
   }
 
-  async *stream(_messages: Message[], _options?: ChatOptions): AsyncIterable<StreamChunk> {
+  async *stream(messages: Message[], options?: ChatOptions): AsyncIterable<StreamChunk> {
+    const body: Record<string, unknown> = {
+      model: options?.model ?? this.id,
+      messages: this.convertMessages(messages),
+      max_tokens: options?.maxTokens ?? this.capabilities.maxTokens,
+      temperature: options?.temperature ?? 0.7,
+      stream: true,
+    };
+    if (options?.tools?.length) {
+      body.tools = this.convertTools(options.tools);
+    }
+
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`,
       },
-      body: JSON.stringify({
-        model: this.id,
-        messages: _messages.map((m) => ({ role: m.role, content: m.content })),
-        max_tokens: _options?.maxTokens ?? this.capabilities.maxTokens,
-        temperature: _options?.temperature ?? 0.7,
-        stream: true,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
       throw new Error(`Zhipu streaming error (${response.status})`);
     }
 
-    const reader = response.body!.getReader();
+    if (!response.body) throw new Error("No response body");
+    const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+
+    // Accumulate streaming tool call fragments
+    const toolCallMap = new Map<
+      number,
+      { id: string; name: string; arguments: string }
+    >();
+    let finishReason = "stop";
+    let inputTokens = 0;
+    let outputTokens = 0;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -126,12 +164,56 @@ export class ZhipuAdapter implements ModelAdapter {
 
         try {
           const parsed = JSON.parse(data) as {
-            choices?: Array<{ delta?: { content?: string } }>;
+            choices?: Array<{
+              delta?: {
+                content?: string;
+                tool_calls?: Array<{
+                  index: number;
+                  id?: string;
+                  type?: string;
+                  function?: { name?: string; arguments?: string };
+                }>;
+              };
+              finish_reason?: string | null;
+            }>;
             usage?: { prompt_tokens: number; completion_tokens: number };
           };
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) {
-            yield { type: "text-delta", text: content };
+
+          const choice = parsed.choices?.[0];
+          if (!choice) continue;
+
+          const delta = choice.delta;
+
+          // Text content
+          if (delta?.content) {
+            yield { type: "text-delta", text: delta.content };
+          }
+
+          // Tool call fragments — accumulate then emit complete tool calls
+          if (delta?.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index;
+              if (!toolCallMap.has(idx)) {
+                toolCallMap.set(idx, {
+                  id: tc.id ?? "",
+                  name: tc.function?.name ?? "",
+                  arguments: "",
+                });
+              }
+              const entry = toolCallMap.get(idx)!;
+              if (tc.id) entry.id = tc.id;
+              if (tc.function?.name) entry.name = tc.function.name;
+              if (tc.function?.arguments) entry.arguments += tc.function.arguments;
+            }
+          }
+
+          if (choice.finish_reason) {
+            finishReason = choice.finish_reason;
+          }
+
+          if (parsed.usage) {
+            inputTokens = parsed.usage.prompt_tokens;
+            outputTokens = parsed.usage.completion_tokens;
           }
         } catch {
           // skip invalid chunks
@@ -139,10 +221,69 @@ export class ZhipuAdapter implements ModelAdapter {
       }
     }
 
+    // Emit accumulated tool calls
+    for (const [, tc] of toolCallMap) {
+      yield {
+        type: "tool-call",
+        toolCall: {
+          id: tc.id,
+          name: tc.name,
+          input: JSON.parse(tc.arguments || "{}"),
+        },
+      };
+    }
+
     yield {
       type: "finish",
-      finishReason: "stop",
-      usage: { inputTokens: 0, outputTokens: 0 },
+      finishReason: finishReason === "tool_calls" ? "tool-calls" : "stop",
+      usage: { inputTokens, outputTokens },
     };
+  }
+
+  private convertMessages(
+    messages: Message[],
+  ): Array<Record<string, unknown>> {
+    return messages.map((msg) => {
+      switch (msg.role) {
+        case "system":
+          return { role: "system", content: msg.content };
+        case "user":
+          return { role: "user", content: msg.content };
+        case "assistant": {
+          const result: Record<string, unknown> = {
+            role: "assistant",
+            content: msg.content || null,
+          };
+          if (msg.toolCalls?.length) {
+            result.tool_calls = msg.toolCalls.map((tc) => ({
+              id: tc.id,
+              type: "function",
+              function: {
+                name: tc.name,
+                arguments: JSON.stringify(tc.input),
+              },
+            }));
+          }
+          return result;
+        }
+        case "tool":
+          return {
+            role: "tool",
+            content: msg.content,
+            tool_call_id: msg.toolCallId ?? "",
+          };
+      }
+    });
+  }
+
+  private convertTools(tools: ToolDefinition[]): unknown[] {
+    return tools.map((t) => ({
+      type: "function",
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: t.inputSchema,
+      },
+    }));
   }
 }

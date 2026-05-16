@@ -1,12 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { simpleReplacer } from "@/tools/edit/simple.js";
-import { lineTrimmedReplacer } from "@/tools/edit/line-trimmed.js";
 import { blockAnchorReplacer } from "@/tools/edit/block-anchor.js";
-import { whitespaceNormReplacer } from "@/tools/edit/whitespace-norm.js";
-import { lineEndingNormReplacer } from "@/tools/edit/line-ending-norm.js";
 import { escapeNormReplacer } from "@/tools/edit/escape-norm.js";
 import { fuzzyBlockReplacer } from "@/tools/edit/fuzzy-block.js";
+import { lineEndingNormReplacer } from "@/tools/edit/line-ending-norm.js";
+import { lineTrimmedReplacer } from "@/tools/edit/line-trimmed.js";
 import { multiFuzzyReplacer } from "@/tools/edit/multi-fuzzy.js";
+import { simpleReplacer } from "@/tools/edit/simple.js";
+import { whitespaceNormReplacer } from "@/tools/edit/whitespace-norm.js";
+import { describe, expect, it } from "vitest";
 
 const content = `function hello() {
   console.log("hello");
@@ -17,7 +17,7 @@ describe("simple replacer", () => {
   it("finds exact match", () => {
     const result = simpleReplacer(content, '  console.log("hello");', '  console.log("world");');
     expect(result).not.toBeNull();
-    expect(result!.index).toBe(content.indexOf('  console.log("hello");'));
+    expect(result?.index).toBe(content.indexOf('  console.log("hello");'));
   });
 
   it("returns null when no exact match", () => {
@@ -35,21 +35,29 @@ describe("lineTrimmed replacer", () => {
 
 describe("blockAnchor replacer", () => {
   it("matches using first and last lines as anchors", () => {
-    const result = blockAnchorReplacer(content, `function hello() {
+    const result = blockAnchorReplacer(
+      content,
+      `function hello() {
 \tsomething different in middle
 \treturn true;
-}`, `function hello() {
+}`,
+      `function hello() {
   console.log("replaced");
   return true;
-}`);
+}`,
+    );
     expect(result).not.toBeNull();
   });
 
   it("returns null when anchors don't match", () => {
-    const result = blockAnchorReplacer(content, `function nope() {
+    const result = blockAnchorReplacer(
+      content,
+      `function nope() {
 \tmiddle
 \treturn false;
-}`, `replacement`);
+}`,
+      "replacement",
+    );
     expect(result).toBeNull();
   });
 });
@@ -81,7 +89,11 @@ describe("escapeNorm replacer", () => {
 describe("fuzzyBlock replacer", () => {
   it("matches with minor differences using similarity", () => {
     const code = "function add(a, b) {\n  return a + b;\n}";
-    const result = fuzzyBlockReplacer(code, "function add(a,b) {\n  return a+b;\n}", "function add(a, b) {\n  return a - b;\n}");
+    const result = fuzzyBlockReplacer(
+      code,
+      "function add(a,b) {\n  return a+b;\n}",
+      "function add(a, b) {\n  return a - b;\n}",
+    );
     expect(result).not.toBeNull();
   });
 });
@@ -91,7 +103,7 @@ describe("multiFuzzy replacer", () => {
     const code = "foo\nbar\nfoo\nbaz";
     const result = multiFuzzyReplacer(code, "foo", "qux");
     expect(result).not.toBeNull();
-    const replaced = code.slice(0, result!.index) + "qux" + code.slice(result!.index + result!.matchedText.length);
+    const replaced = `${code.slice(0, result?.index)}qux${code.slice(result?.index + result?.matchedText.length)}`;
     expect(replaced).toContain("qux");
   });
 

@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createApplyPatchTool } from "@/tools/apply-patch.js";
 import type { ToolContext } from "@/types.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 function makeContext(workDir: string): ToolContext {
   return {
@@ -80,7 +80,11 @@ Second line
   });
 
   it("moves a file", async () => {
-    await fs.writeFile(path.join(tmpDir, "original.txt"), "line 1\nsome content\nline 3\n", "utf-8");
+    await fs.writeFile(
+      path.join(tmpDir, "original.txt"),
+      "line 1\nsome content\nline 3\n",
+      "utf-8",
+    );
 
     const tool = createApplyPatchTool();
     const patch = `*** Begin Patch

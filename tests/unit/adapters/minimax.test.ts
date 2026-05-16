@@ -1,4 +1,4 @@
-import { MiniMaxAdapter, MINIMAX_MODELS } from "@/adapters/minimax.js";
+import { MINIMAX_MODELS, MiniMaxAdapter } from "@/adapters/minimax.js";
 import type { Message } from "@/types.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,21 +16,26 @@ describe("MiniMaxAdapter", () => {
   });
 
   it("has correct id and provider", () => {
-    expect(adapter.id).toBe("abab6.5s-chat");
+    expect(adapter.id).toBe("MiniMax-M2.7");
     expect(adapter.provider).toBe("minimax");
   });
 
-  it("reports correct capabilities for abab6.5s-chat", () => {
+  it("reports correct capabilities for MiniMax-M2.7", () => {
     expect(adapter.capabilities.tools).toBe(true);
-    expect(adapter.capabilities.contextWindow).toBe(245_000);
+    expect(adapter.capabilities.contextWindow).toBe(1_000_000);
   });
 
-  it("sends chat request with group ID header", async () => {
+  it("sends chat request in OpenAI-compatible format", async () => {
     fetchSpy.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        reply: "Hello from MiniMax!",
-        usage: { total_tokens: 15 },
+        choices: [
+          {
+            message: { content: "Hello from MiniMax!" },
+            finish_reason: "stop",
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
       }),
     } as any);
 
@@ -39,21 +44,59 @@ describe("MiniMaxAdapter", () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, opts] = fetchSpy.mock.calls[0];
-    expect(url).toContain("minimax.chat");
+    expect(url).toContain("minimaxi.com/v1/chat/completions");
     const headers = (opts as any).headers;
     expect(headers["Authorization"]).toContain("test-key");
     expect(response.content).toBe("Hello from MiniMax!");
+    expect(response.finishReason).toBe("stop");
+    expect(response.usage.inputTokens).toBe(10);
+    expect(response.usage.outputTokens).toBe(5);
+  });
+
+  it("parses tool calls from response", async () => {
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: "",
+              tool_calls: [
+                {
+                  id: "tc-1",
+                  type: "function",
+                  function: { name: "read_file", arguments: '{"path":"/test.ts"}' },
+                },
+              ],
+            },
+            finish_reason: "tool_calls",
+          },
+        ],
+        usage: { prompt_tokens: 20, completion_tokens: 10 },
+      }),
+    } as any);
+
+    const messages: Message[] = [{ role: "user", content: "Read test.ts" }];
+    const response = await adapter.chat(messages);
+
+    expect(response.toolCalls).toHaveLength(1);
+    expect(response.toolCalls[0].name).toBe("read_file");
+    expect(response.toolCalls[0].input).toEqual({ path: "/test.ts" });
+    expect(response.finishReason).toBe("tool-calls");
   });
 
   it("handles missing group ID gracefully", async () => {
     const noGroupAdapter = new MiniMaxAdapter({ apiKey: "key" });
     fetchSpy.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ reply: "OK" }),
+      json: async () => ({
+        choices: [{ message: { content: "OK" }, finish_reason: "stop" }],
+      }),
     } as any);
 
     const messages: Message[] = [{ role: "user", content: "Hi" }];
-    await expect(noGroupAdapter.chat(messages)).resolves.toBeDefined();
+    const response = await noGroupAdapter.chat(messages);
+    expect(response.content).toBe("OK");
   });
 
   it("handles rate limit error", async () => {
@@ -71,6 +114,7 @@ describe("MiniMaxAdapter", () => {
 
   it("MINIMAX_MODELS has expected entries", () => {
     expect(MINIMAX_MODELS["abab6.5s-chat"].contextWindow).toBe(245_000);
-    expect(MINIMAX_MODELS["abab5.5-chat"].tools).toBe(false);
+    expect(MINIMAX_MODELS["MiniMax-M2.7"].tools).toBe(true);
+    expect(MINIMAX_MODELS["MiniMax-M2.5"].vision).toBe(true);
   });
 });

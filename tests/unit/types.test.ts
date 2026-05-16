@@ -101,7 +101,7 @@ describe("ToolContext", () => {
       sessionId: "s1",
       askPermission,
     };
-    expect(await ctx.askPermission!({ tool: "bash", capability: "ExecCode" })).toBe(true);
+    expect(await ctx.askPermission?.({ tool: "bash", capability: "ExecCode" })).toBe(true);
   });
 
   it("works without optional fields", () => {

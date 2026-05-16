@@ -72,10 +72,7 @@ describe("SkillImporter", () => {
     // This test verifies validation
     const skillDir = path.join(tmpDir, "invalid-skill");
     await fs.mkdir(skillDir, { recursive: true });
-    await fs.writeFile(
-      path.join(skillDir, "SKILL.md"),
-      "No frontmatter at all, just plain text",
-    );
+    await fs.writeFile(path.join(skillDir, "SKILL.md"), "No frontmatter at all, just plain text");
 
     const packager = new SkillPackager();
     const packResult = await packager.pack("invalid-skill", skillDir);

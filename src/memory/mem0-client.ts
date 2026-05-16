@@ -38,29 +38,58 @@ export interface Mem0SdkClient {
   getAll: Function;
 }
 
-export class Mem0Client {
-  private client: Mem0SdkClient | null;
-  private enabled: boolean;
+export interface Mem0OSSConfig {
+  embedder: {
+    provider: string;
+    config: Record<string, unknown>;
+  };
+  vectorStore: {
+    provider: string;
+    config: Record<string, unknown>;
+  };
+  llm?: {
+    provider: string;
+    config: Record<string, unknown>;
+  };
+}
 
-  constructor(options: { apiKey?: string; host?: string; client?: Mem0SdkClient }) {
-    if (options.client) {
+export class Mem0Client {
+  private client: Mem0SdkClient | null = null;
+  private enabled = false;
+
+  constructor(options?: { client?: Mem0SdkClient }) {
+    if (options?.client) {
       this.client = options.client;
+      this.enabled = true;
+    }
+  }
+
+  async init(options: { apiKey?: string; host?: string; oss?: Mem0OSSConfig }): Promise<void> {
+    if (options.oss) {
+      const { Memory } = await import("mem0ai/oss");
+      const memory = new Memory(options.oss);
+      this.client = {
+        add: (messages: unknown, opts?: unknown) =>
+          memory.add(messages as Parameters<typeof memory.add>[0], opts as Parameters<typeof memory.add>[1]),
+        search: async (query: string, opts?: unknown) => {
+          const results = await memory.search(query, opts as Parameters<typeof memory.search>[1]);
+          if (Array.isArray(results)) return { results };
+          return results;
+        },
+        delete: (id: string) => memory.delete(id),
+        getAll: (opts?: unknown) =>
+          memory.getAll(opts as Parameters<typeof memory.getAll>[0]),
+      };
       this.enabled = true;
     } else if (options.apiKey) {
       try {
-        const { MemoryClient } = require("mem0ai");
-        this.client = new MemoryClient({
-          apiKey: options.apiKey,
-          host: options.host,
-        }) as Mem0SdkClient;
+        const { MemoryClient } = await import("mem0ai");
+        this.client = new MemoryClient({ apiKey: options.apiKey, host: options.host }) as Mem0SdkClient;
         this.enabled = true;
       } catch {
         this.client = null;
         this.enabled = false;
       }
-    } else {
-      this.client = null;
-      this.enabled = false;
     }
   }
 
@@ -92,7 +121,7 @@ export class Mem0Client {
 
     try {
       const response = (await this.client.search(query, options)) as {
-        results: Array<{
+        results?: Array<{
           id: string;
           memory: string;
           score: number;
@@ -104,8 +133,10 @@ export class Mem0Client {
         }>;
       };
 
+      const results = Array.isArray(response) ? response : response.results ?? [];
+
       return ok(
-        response.results.map((r) => ({
+        results.map((r) => ({
           id: r.id,
           memory: r.memory,
           score: r.score,
@@ -141,7 +172,7 @@ export class Mem0Client {
 
     try {
       const response = (await this.client.getAll(options)) as {
-        results: Array<{
+        results?: Array<{
           id: string;
           memory: string;
           score?: number;
@@ -149,8 +180,10 @@ export class Mem0Client {
         }>;
       };
 
+      const results = Array.isArray(response) ? response : response.results ?? [];
+
       return ok(
-        response.results.map((r) => ({
+        results.map((r) => ({
           id: r.id,
           memory: r.memory,
           score: r.score ?? 0,

@@ -1,0 +1,31 @@
+{
+  "note": "此为预期输出格式参考。实际数值取决于 CSV 数据，但结构应与此一致。",
+  "summary": {
+    "Electronics": {
+      "totalSales": 0,
+      "orderCount": 0,
+      "averageOrderAmount": 0,
+      "topProduct": ""
+    },
+    "Clothing": {
+      "totalSales": 0,
+      "orderCount": 0,
+      "averageOrderAmount": 0,
+      "topProduct": ""
+    },
+    "Food": {
+      "totalSales": 0,
+      "orderCount": 0,
+      "averageOrderAmount": 0,
+      "topProduct": ""
+    },
+    "Books": {
+      "totalSales": 0,
+      "orderCount": 0,
+      "averageOrderAmount": 0,
+      "topProduct": ""
+    }
+  },
+  "totalProcessedRows": 0,
+  "filteredRows": 0
+}

@@ -98,7 +98,7 @@ export function createMCPTools(ctx: MCPToolContext): MCPTool[] {
         if (!skillObj) return { content: `Skill not found: ${skill}` };
 
         const result = await ctx.skillExecutor.execute(skillObj, (input as string) || "", {
-          adapter: null as any,
+          adapter: ctx.providerRegistry.getActiveAdapter(),
           permissionMode: "auto",
           loopConfig: {
             maxLoops: 50,

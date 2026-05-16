@@ -15,12 +15,7 @@ export function formatSearchResults(results: SearchResult[]): string {
     return "No search results found";
   }
 
-  return results
-    .map(
-      (r, i) =>
-        `${i + 1}. [${r.title}](${r.url})\n   ${r.text}`,
-    )
-    .join("\n\n");
+  return results.map((r, i) => `${i + 1}. [${r.title}](${r.url})\n   ${r.text}`).join("\n\n");
 }
 
 // ─── Tool Factory ───────────────────────────────────────────────
@@ -63,15 +58,11 @@ export function createWebSearchTool(): Tool {
         };
       }
 
-      const searchUrl =
-        process.env.HIWI_SEARCH_URL ?? "https://api.exa.ai/search";
+      const searchUrl = process.env.HIWI_SEARCH_URL ?? "https://api.exa.ai/search";
       const apiKey = process.env.HIWI_SEARCH_KEY ?? "";
 
       const controller = new AbortController();
-      const timeout = setTimeout(
-        () => controller.abort(),
-        SEARCH_TIMEOUT_MS,
-      );
+      const timeout = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
 
       try {
         const response = await fetch(searchUrl, {
@@ -109,7 +100,7 @@ export function createWebSearchTool(): Tool {
           text: r.text ?? "",
         }));
 
-        const preview = query.length > 50 ? query.slice(0, 50) + "..." : query;
+        const preview = query.length > 50 ? `${query.slice(0, 50)}...` : query;
 
         return {
           toolCallId: "",
@@ -119,8 +110,7 @@ export function createWebSearchTool(): Tool {
           metadata: { resultCount: results.length },
         };
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
         return {
           toolCallId: "",
           content: `Search error: ${message}`,

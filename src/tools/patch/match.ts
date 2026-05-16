@@ -32,11 +32,7 @@ export function seekSequence(needle: string[], haystack: string[]): number {
   return -1;
 }
 
-function findMatch(
-  needle: string[],
-  haystack: string[],
-  normalize: (s: string) => string,
-): number {
+function findMatch(needle: string[], haystack: string[], normalize: (s: string) => string): number {
   for (let i = 0; i <= haystack.length - needle.length; i++) {
     let match = true;
     for (let j = 0; j < needle.length; j++) {
@@ -57,7 +53,7 @@ function trimTrailing(s: string): string {
 /** Map smart quotes to straight quotes, then full-trim for robustness. */
 function normalizeUnicode(s: string): string {
   return s
-    .replace(/[‘’]/g, "'")  // smart single quotes
-    .replace(/[“”]/g, '"')   // smart double quotes
+    .replace(/[‘’]/g, "'") // smart single quotes
+    .replace(/[“”]/g, '"') // smart double quotes
     .trim();
 }

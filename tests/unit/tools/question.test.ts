@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
 import { createQuestionTool } from "@/tools/question.js";
 import type { Tool, ToolContext } from "@/types.js";
+import { describe, expect, it, vi } from "vitest";
 
 describe("question tool", () => {
   let tool: Tool;
@@ -21,18 +21,13 @@ describe("question tool", () => {
       askUserQuestions: vi.fn().mockResolvedValue({ "What language?": "TypeScript" }),
     };
 
-    const result = await tool.execute(
-      { questions: [{ question: "What language?" }] },
-      ctx,
-    );
+    const result = await tool.execute({ questions: [{ question: "What language?" }] }, ctx);
 
     expect(result.isError).toBe(false);
     expect(result.title).toBe("1 question(s) asked");
     expect(result.content).toContain("What language?");
     expect(result.content).toContain("TypeScript");
-    expect(ctx.askUserQuestions).toHaveBeenCalledWith([
-      { question: "What language?" },
-    ]);
+    expect(ctx.askUserQuestions).toHaveBeenCalledWith([{ question: "What language?" }]);
   });
 
   it("handles multiple questions", async () => {
@@ -48,10 +43,7 @@ describe("question tool", () => {
 
     const result = await tool.execute(
       {
-        questions: [
-          { question: "What language?" },
-          { question: "What framework?" },
-        ],
+        questions: [{ question: "What language?" }, { question: "What framework?" }],
       },
       ctx,
     );
@@ -69,10 +61,7 @@ describe("question tool", () => {
       // askUserQuestions is undefined
     };
 
-    const result = await tool.execute(
-      { questions: [{ question: "What?" }] },
-      ctx,
-    );
+    const result = await tool.execute({ questions: [{ question: "What?" }] }, ctx);
 
     expect(result.isError).toBe(true);
     expect(result.content).toContain("not available");

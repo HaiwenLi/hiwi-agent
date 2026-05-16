@@ -1,7 +1,7 @@
+import { ToolRegistry } from "@/core/tools.js";
 import { SkillComposer, type WorkflowDefinition } from "@/skills/composer.js";
 import { SkillExecutor } from "@/skills/executor.js";
 import type { Skill } from "@/skills/loader.js";
-import { ToolRegistry } from "@/core/tools.js";
 import type { ModelAdapter, Tool } from "@/types.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -121,7 +121,14 @@ describe("SkillComposer", () => {
     await composer.execute(workflow, "input", {
       adapter,
       permissionMode: "normal",
-      loopConfig: { maxLoops: 5, maxOutputTokensPerTurn: 1024, budgetTotal: 5, refundableTools: [], streaming: false, interruptible: false },
+      loopConfig: {
+        maxLoops: 5,
+        maxOutputTokensPerTurn: 1024,
+        budgetTotal: 5,
+        refundableTools: [],
+        streaming: false,
+        interruptible: false,
+      },
     });
 
     // Only first step should execute
@@ -158,7 +165,14 @@ describe("SkillComposer", () => {
     const result = await composer.execute(workflow, "input", {
       adapter,
       permissionMode: "normal",
-      loopConfig: { maxLoops: 5, maxOutputTokensPerTurn: 1024, budgetTotal: 5, refundableTools: [], streaming: false, interruptible: false },
+      loopConfig: {
+        maxLoops: 5,
+        maxOutputTokensPerTurn: 1024,
+        budgetTotal: 5,
+        refundableTools: [],
+        streaming: false,
+        interruptible: false,
+      },
     });
 
     expect(result.isErr()).toBe(true);
@@ -181,7 +195,14 @@ describe("SkillComposer", () => {
     const result = await composer.execute(workflow, "input", {
       adapter,
       permissionMode: "normal",
-      loopConfig: { maxLoops: 5, maxOutputTokensPerTurn: 1024, budgetTotal: 5, refundableTools: [], streaming: false, interruptible: false },
+      loopConfig: {
+        maxLoops: 5,
+        maxOutputTokensPerTurn: 1024,
+        budgetTotal: 5,
+        refundableTools: [],
+        streaming: false,
+        interruptible: false,
+      },
     });
 
     expect(result.isErr()).toBe(true);

@@ -1,5 +1,10 @@
+import {
+  ANTHROPIC_PROMPT,
+  DEFAULT_PROMPT,
+  GPT_PROMPT,
+  selectBasePrompt,
+} from "@/core/prompt/prompts.js";
 import { describe, expect, it } from "vitest";
-import { ANTHROPIC_PROMPT, GPT_PROMPT, DEFAULT_PROMPT, selectBasePrompt } from "@/core/prompt/prompts.js";
 
 describe("provider prompts", () => {
   it("anthropic prompt contains coding instructions", () => {

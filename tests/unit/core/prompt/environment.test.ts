@@ -1,6 +1,6 @@
 import os from "node:os";
-import { describe, expect, it } from "vitest";
 import { buildEnvironmentContext } from "@/core/prompt/environment.js";
+import { describe, expect, it } from "vitest";
 
 describe("buildEnvironmentContext", () => {
   it("includes working directory", () => {

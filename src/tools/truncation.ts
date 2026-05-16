@@ -1,7 +1,15 @@
-import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import crypto from "node:crypto";
+import {
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import crypto from "node:crypto";
 
 export interface TruncationOptions {
   maxLines?: number;

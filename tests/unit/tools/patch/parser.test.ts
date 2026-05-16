@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
 import { parsePatch } from "@/tools/patch/parser.js";
+import { describe, expect, it } from "vitest";
 
 describe("parsePatch", () => {
   it("parses an Add File hunk", () => {
