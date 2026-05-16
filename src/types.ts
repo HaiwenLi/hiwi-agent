@@ -73,7 +73,14 @@ export interface ModelAdapter {
 
 // ─── Tool System Types ────────────────────────────────────────
 
-export type ToolCapability = "ReadOnly" | "WriteFiles" | "ExecCode" | "Network";
+export type ToolCapability =
+  | "ReadOnly"
+  | "WriteFiles"
+  | "ExecCode"
+  | "Network"
+  | "NetworkAccess"
+  | "UserInteraction"
+  | "StateUpdate";
 
 export interface Tool {
   name: string;
@@ -88,11 +95,17 @@ export interface PermissionRequest {
   capability: string;
 }
 
+export interface QuestionPrompt {
+  question: string;
+  options?: Array<{ label: string; description?: string }>;
+}
+
 export interface ToolContext {
   workingDirectory: string;
   sessionId: string;
   abort?: AbortSignal;
   askPermission?: (req: PermissionRequest) => Promise<boolean>;
+  askUserQuestions?: (questions: QuestionPrompt[]) => Promise<Record<string, string>>;
 }
 
 export type PermissionMode = "normal" | "auto" | "yolo";
@@ -137,6 +150,8 @@ export interface ProviderConfig {
   apiKey?: string;
   baseUrl?: string;
   models?: string[];
+  /** For mem0 OSS (self-hosted) mode — embbedder, vectorStore, llm config */
+  oss?: Record<string, unknown>;
 }
 
 export interface SystemPromptConfig {
@@ -152,6 +167,13 @@ export interface AgentConfig {
 }
 
 // ─── Model Info (for listing) ─────────────────────────────────
+
+export interface ModelEntry {
+  id: string;
+  label?: string;
+  tier?: "fast" | "standard" | "premium";
+  tags?: string[];
+}
 
 export interface ModelInfo {
   id: string;
