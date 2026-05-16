@@ -1,9 +1,11 @@
+import type { AgentFS } from "../agentfs/index.js";
 import type { ProviderRegistry } from "../adapters/registry.js";
 import type { ToolRegistry } from "../core/tools.js";
 import type { MemoryManager } from "../memory/manager.js";
 import type { SkillRegistry } from "../skills/registry.js";
 import type { AgentLoopConfig, ModelAdapter, PermissionMode } from "../types.js";
 import { createAcademicSearchTool } from "./academic-search.js";
+import { createAgentFSTools } from "./agentfs-tools.js";
 import { createApplyPatchTool } from "./apply-patch.js";
 import { createBashTool } from "./bash.js";
 import { createCodeSearchTool } from "./code-search.js";
@@ -77,6 +79,12 @@ export function registerAgentTools(
   registry.register(createMemoryForgetTool(deps.memoryManager));
   registry.register(createSkillExecuteTool(deps.skillRegistry, registry, deps.providerRegistry));
   registry.register(createSkillListTool(deps.skillRegistry));
+}
+
+export function registerAgentFSTools(registry: ToolRegistry, agentfs: AgentFS): void {
+  for (const tool of createAgentFSTools(agentfs)) {
+    registry.register(tool);
+  }
 }
 
 export {

@@ -11,6 +11,7 @@ import type {
   ToolResult,
   TokenUsage,
 } from "../types.js";
+import type { AgentFS } from "../agentfs/index.js";
 import { assembleSystemPrompt } from "./prompt/assembler.js";
 import type { ToolRegistry } from "./tools.js";
 
@@ -101,6 +102,7 @@ export class AgentLoop {
     private config: AgentLoopConfig,
     private context?: ToolContext,
     private memoryStore?: MemoryFileStore,
+    private agentfs?: AgentFS,
   ) {
     if (memoryStore) {
       this.autoExtractor = new AutoExtractor(adapter, memoryStore);
@@ -270,7 +272,25 @@ export class AgentLoop {
     input: Record<string, unknown>,
     ctx: ToolContext,
   ): Promise<ToolResult> {
-    const result = await this.toolRegistry.execute(name, input, ctx, this.permissionMode);
-    return { ...result, toolCallId: id };
+    let auditId: number | undefined;
+    if (this.agentfs) {
+      auditId = this.agentfs.trail.start(name, input);
+    }
+    try {
+      const result = await this.toolRegistry.execute(name, input, ctx, this.permissionMode);
+      if (this.agentfs && auditId !== undefined) {
+        if (result.isError) {
+          this.agentfs.trail.error(auditId, result.content);
+        } else {
+          this.agentfs.trail.success(auditId, result.content);
+        }
+      }
+      return { ...result, toolCallId: id };
+    } catch (err) {
+      if (this.agentfs && auditId !== undefined) {
+        this.agentfs.trail.error(auditId, String(err));
+      }
+      throw err;
+    }
   }
 }
