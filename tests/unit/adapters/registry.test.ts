@@ -82,4 +82,37 @@ describe("ProviderRegistry", () => {
     expect(registry.getActiveProvider()).toBe("anthropic");
     expect(registry.getActiveModel()).toBe("claude-sonnet-4-6");
   });
+
+  it("getModelCatalog returns catalog grouped by provider", () => {
+    const catalog = registry.getModelCatalog();
+    expect(catalog.anthropic).toBeDefined();
+    expect(Array.isArray(catalog.anthropic)).toBe(true);
+  });
+
+  it("getAvailableModels returns flat list of all models", () => {
+    const models = registry.getAvailableModels();
+    expect(models.length).toBeGreaterThan(0);
+    expect(models[0]).toHaveProperty("id");
+  });
+
+  it("setModelWithProvider resolves provider from catalog", () => {
+    const mockAnthropic = new MockAdapter([], { id: "claude-opus-4-7", provider: "anthropic" });
+    registry.registerAdapter("anthropic", mockAnthropic);
+
+    registry.setModelWithProvider("claude-opus-4-7");
+    expect(registry.getActiveModel()).toBe("claude-opus-4-7");
+    expect(registry.getActiveProvider()).toBe("anthropic");
+  });
+
+  it("setModelWithProvider throws for unknown model", () => {
+    expect(() => registry.setModelWithProvider("nonexistent-model-xyz")).toThrow(
+      /unknown model/i,
+    );
+  });
+
+  it("setProvider rejects unknown providers", () => {
+    expect(() => registry.setProvider("nonexistent-provider-xyz")).toThrow(
+      /unknown provider/i,
+    );
+  });
 });
