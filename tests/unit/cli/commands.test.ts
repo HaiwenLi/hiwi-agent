@@ -74,16 +74,30 @@ describe("CommandRegistry", () => {
   });
 
   describe("built-in commands", () => {
-    it("/model sets active model", async () => {
+    it("/model with args sets active model", async () => {
       registry.registerBuiltinCommands();
       await registry.dispatch("/model gpt-4o", ctx);
       expect(ctx.providerRegistry.setModel).toHaveBeenCalledWith("gpt-4o");
     });
 
-    it("/provider sets active provider", async () => {
+    it("/model with no args requests mode switch to model-picker", async () => {
+      const modeSwitchSpy = vi.fn();
+      registry.registerBuiltinCommands();
+      await registry.dispatch("/model", { ...ctx, requestModeSwitch: modeSwitchSpy });
+      expect(modeSwitchSpy).toHaveBeenCalledWith("model-picker");
+    });
+
+    it("/provider with args sets active provider", async () => {
       registry.registerBuiltinCommands();
       await registry.dispatch("/provider openai", ctx);
       expect(ctx.providerRegistry.setProvider).toHaveBeenCalledWith("openai");
+    });
+
+    it("/provider with no args requests mode switch to provider-picker", async () => {
+      const modeSwitchSpy = vi.fn();
+      registry.registerBuiltinCommands();
+      await registry.dispatch("/provider", { ...ctx, requestModeSwitch: modeSwitchSpy });
+      expect(modeSwitchSpy).toHaveBeenCalledWith("provider-picker");
     });
 
     it("/models lists available models", async () => {

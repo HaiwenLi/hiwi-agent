@@ -62,25 +62,27 @@ export class CommandRegistry {
   registerBuiltinCommands(): void {
     this.register({
       name: "model",
-      description: "Set or show active model",
+      description: "Set or pick active model",
       handler: async (args, ctx) => {
         if (args) {
           ctx.providerRegistry.setModel(args);
           return `Model set to: ${args}`;
         }
-        return `Active model: ${ctx.providerRegistry.getActiveModel()}`;
+        ctx.requestModeSwitch?.("model-picker");
+        return "";
       },
     });
 
     this.register({
       name: "provider",
-      description: "Set or show active provider",
+      description: "Set or pick active provider",
       handler: async (args, ctx) => {
         if (args) {
           ctx.providerRegistry.setProvider(args);
           return `Provider set to: ${args}`;
         }
-        return `Active provider: ${ctx.providerRegistry.getActiveProvider()}`;
+        ctx.requestModeSwitch?.("provider-picker");
+        return "";
       },
     });
 

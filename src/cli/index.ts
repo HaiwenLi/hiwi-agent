@@ -2,19 +2,20 @@
 import os from "node:os";
 import path from "node:path";
 import { ProviderRegistry } from "../adapters/registry.js";
-import { loadConfig } from "../core/config.js";
+import { loadConfig, saveModelSelection } from "../core/config.js";
 import { ToolRegistry } from "../core/tools.js";
 import { MCPServer } from "../mcp/server.js";
 import { MemoryFileStore } from "../memory/file-store.js";
 import { MemoryManager } from "../memory/manager.js";
-import { Mem0Client } from "../memory/mem0-client.js";
+import { Mem0Client, type Mem0OSSConfig } from "../memory/mem0-client.js";
 import { SessionStore } from "../memory/session.js";
 import { SkillExecutor } from "../skills/executor.js";
 import { SkillLoader } from "../skills/loader.js";
 import { SkillRegistry } from "../skills/registry.js";
+import type { PermissionMode } from "../types.js";
+import { renderApp } from "./app.js";
 import { CommandRegistry } from "./commands.js";
 import { REPL } from "./repl.js";
-import type { PermissionMode } from "../types.js";
 
 export interface CLIOptions {
   mcp?: boolean;
@@ -85,9 +86,12 @@ export async function main(options: CLIOptions = {}): Promise<void> {
   const memoryDir = path.join(globalDir, "memory");
   const fileStore = new MemoryFileStore(memoryDir);
   await fileStore.init();
-  const mem0 = new Mem0Client({
-    apiKey: config.providers.mem0?.apiKey,
-    host: config.providers.mem0?.baseUrl,
+  const mem0Provider = config.providers.mem0;
+  const mem0 = new Mem0Client();
+  await mem0.init({
+    apiKey: mem0Provider?.apiKey,
+    host: mem0Provider?.baseUrl,
+    oss: mem0Provider?.oss as unknown as Mem0OSSConfig | undefined,
   });
   const memoryManager = new MemoryManager(fileStore, mem0);
 
@@ -97,6 +101,7 @@ export async function main(options: CLIOptions = {}): Promise<void> {
 
   const skillSearchPaths = [
     path.join(globalDir, "skills"),
+    path.join(projectDir, "skills"),
     path.join(projectDir, ".agent", "skills"),
     path.join(projectDir, ".opencode", "skills"),
     path.join(projectDir, ".claude", "skills"),
@@ -123,6 +128,39 @@ export async function main(options: CLIOptions = {}): Promise<void> {
 
   const permissionMode: { value: PermissionMode } = { value: "normal" };
 
+  const app = renderApp({
+    onInput: async (text) => {
+      const result = await repl.processInput(text);
+      if (result === "exit") app.unmount();
+    },
+    onModelSelect: async (modelId) => {
+      try {
+        providerRegistry.setModelWithProvider(modelId);
+        const provider = providerRegistry.getActiveProvider();
+        const adapter = providerRegistry.createAdapter(provider);
+        providerRegistry.registerAdapter(provider, adapter);
+        await saveModelSelection(projectDir, provider, modelId);
+        app.addOutput(`Model: ${modelId} (${provider})`);
+      } catch (e: unknown) {
+        app.addOutput(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    },
+    onProviderSelect: async (provider) => {
+      try {
+        providerRegistry.setProvider(provider);
+        const adapter = providerRegistry.createAdapter(provider);
+        providerRegistry.registerAdapter(provider, adapter);
+        await saveModelSelection(projectDir, provider, providerRegistry.getActiveModel());
+        app.addOutput(`Provider: ${provider}`);
+      } catch (e: unknown) {
+        app.addOutput(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    },
+    onPickerCancel: () => {
+      app.addOutput("Cancelled.");
+    },
+  });
+
   const repl = new REPL({
     commandRegistry,
     skillRegistry,
@@ -136,24 +174,25 @@ export async function main(options: CLIOptions = {}): Promise<void> {
     providerRegistry,
     memoryManager,
     sessionStore,
-    onOutput: (text) => process.stdout.write(`${text}\n`),
-    onStreamChunk: (chunk) => process.stdout.write(chunk),
-    onStreamEnd: () => process.stdout.write("\n"),
+    onOutput: (text) => app.addOutput(text),
+    onStreamChunk: (chunk) => app.addStreamChunk(chunk),
+    onStreamEnd: () => app.endStream(),
+    onRequestModeSwitch: (mode) => {
+      if (mode === "model-picker") {
+        const catalog = providerRegistry.getModelCatalog();
+        app.openModelPicker(
+          catalog,
+          providerRegistry.getActiveModel(),
+          providerRegistry.getActiveProvider(),
+        );
+      } else if (mode === "provider-picker") {
+        const providers = Object.keys(providerRegistry.getModelCatalog());
+        app.openProviderPicker(providers, providerRegistry.getActiveProvider());
+      }
+    },
   });
 
-  const readline = await import("node:readline");
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-
-  process.stdout.write("hiwi-agent ready. Type /help for commands.\n");
-
-  for await (const line of rl) {
-    const result = await repl.processInput(line);
-    if (result === "exit") {
-      rl.close();
-      break;
-    }
-  }
-
+  await app.waitUntilExit();
   sessionStore.close();
 }
 
