@@ -8,6 +8,7 @@ const ProviderConfigSchema = z.object({
   apiKey: z.string().optional(),
   baseUrl: z.string().optional(),
   models: z.array(z.string()).optional(),
+  oss: z.record(z.string(), z.unknown()).optional(),
 });
 
 const AgentLoopConfigSchema = z.object({
@@ -40,9 +41,11 @@ const AgentConfigPartialSchema = z.object({
       interruptible: z.boolean().optional(),
     })
     .optional(),
-  systemPrompt: z.object({
-    providerVariant: z.enum(["auto", "anthropic", "gpt", "default"]).optional(),
-  }).optional(),
+  systemPrompt: z
+    .object({
+      providerVariant: z.enum(["auto", "anthropic", "gpt", "default"]).optional(),
+    })
+    .optional(),
 });
 
 const DEFAULT_CONFIG: AgentConfig = {
@@ -91,7 +94,10 @@ function deepMerge(base: AgentConfig, override: Record<string, unknown>): AgentC
   if (override.agent !== undefined)
     result.agent = { ...base.agent, ...(override.agent as Partial<AgentLoopConfig>) };
   if (override.systemPrompt !== undefined)
-    result.systemPrompt = { ...base.systemPrompt, ...(override.systemPrompt as Partial<SystemPromptConfig>) };
+    result.systemPrompt = {
+      ...base.systemPrompt,
+      ...(override.systemPrompt as Partial<SystemPromptConfig>),
+    };
   return result;
 }
 
@@ -131,4 +137,25 @@ export async function loadConfig(
   }
 
   return ok(resolveConfig(config));
+}
+
+export async function saveModelSelection(
+  projectDir: string,
+  provider: string,
+  model: string,
+): Promise<void> {
+  const agentDir = path.join(projectDir, ".agent");
+  await fs.mkdir(agentDir, { recursive: true });
+
+  const configPath = path.join(agentDir, "config.json");
+  let existing: Record<string, unknown> = {};
+  try {
+    const content = await fs.readFile(configPath, "utf-8");
+    existing = JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    // file doesn't exist yet
+  }
+
+  const updated = { ...existing, activeProvider: provider, activeModel: model };
+  await fs.writeFile(configPath, JSON.stringify(updated, null, 2) + "\n");
 }

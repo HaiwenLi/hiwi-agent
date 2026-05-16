@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { loadConfig, resolveApiKey, resolveConfig } from "@/core/config.js";
+import { loadConfig, resolveApiKey, resolveConfig, saveModelSelection } from "@/core/config.js";
 import type { AgentConfig, SystemPromptConfig } from "@/types.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -150,5 +150,54 @@ describe("systemPrompt config", () => {
     if (result.isOk()) {
       expect((result.value as any).systemPrompt).toBeUndefined();
     }
+  });
+});
+
+describe("saveModelSelection", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = path.join(os.tmpdir(), `agent-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await fs.mkdir(tmpDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  });
+
+  it("writes activeProvider and activeModel to project config", async () => {
+    await saveModelSelection(tmpDir, "anthropic", "claude-opus-4-7");
+
+    const filePath = path.join(tmpDir, ".agent", "config.json");
+    const content = await fs.readFile(filePath, "utf-8");
+    const data = JSON.parse(content);
+
+    expect(data.activeProvider).toBe("anthropic");
+    expect(data.activeModel).toBe("claude-opus-4-7");
+  });
+
+  it("merges with existing config file", async () => {
+    const agentDir = path.join(tmpDir, ".agent");
+    await fs.mkdir(agentDir, { recursive: true });
+    await fs.writeFile(
+      path.join(agentDir, "config.json"),
+      JSON.stringify({ activeProvider: "ollama", agent: { maxLoops: 20 } }),
+    );
+
+    await saveModelSelection(tmpDir, "anthropic", "claude-opus-4-7");
+
+    const content = await fs.readFile(path.join(agentDir, "config.json"), "utf-8");
+    const data = JSON.parse(content);
+
+    expect(data.activeProvider).toBe("anthropic");
+    expect(data.activeModel).toBe("claude-opus-4-7");
+    expect(data.agent.maxLoops).toBe(20);
+  });
+
+  it("creates .agent directory if it does not exist", async () => {
+    await saveModelSelection(tmpDir, "openai", "gpt-4o");
+
+    const stat = await fs.stat(path.join(tmpDir, ".agent"));
+    expect(stat.isDirectory()).toBe(true);
   });
 });
