@@ -1,5 +1,5 @@
-import type { ProviderRegistry } from "../adapters/registry.js";
 import { testConnection } from "../adapters/connection-test.js";
+import type { ProviderRegistry } from "../adapters/registry.js";
 import type { MemoryManager } from "../memory/manager.js";
 import type { SessionStore } from "../memory/session.js";
 import type { SkillRegistry } from "../skills/registry.js";
@@ -14,6 +14,7 @@ export interface CommandContext {
   setPermissionMode: (mode: PermissionMode) => void;
   output: (text: string) => void;
   confirm?: (message: string) => Promise<boolean>;
+  requestModeSwitch?: (mode: string) => void;
 }
 
 export interface Command {

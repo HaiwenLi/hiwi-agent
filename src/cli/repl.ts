@@ -2,11 +2,12 @@ import type { ProviderRegistry } from "../adapters/registry.js";
 import { AgentLoop } from "../core/agent.js";
 import type { ToolRegistry } from "../core/tools.js";
 import type { MemoryManager } from "../memory/manager.js";
+import { SessionSummarizer } from "../memory/session-summary.js";
 import type { SessionStore } from "../memory/session.js";
 import { SkillExecutor } from "../skills/executor.js";
 import type { Skill } from "../skills/loader.js";
 import type { SkillRegistry } from "../skills/registry.js";
-import { registerCoreTools, registerExtraTools } from "../tools/index.js";
+import { registerAgentTools, registerCoreTools, registerExtraTools } from "../tools/index.js";
 import type { AgentLoopConfig, Message, PermissionMode } from "../types.js";
 import type { CommandContext, CommandRegistry } from "./commands.js";
 
@@ -25,6 +26,7 @@ export interface REPLDependencies {
   onStreamChunk?: (chunk: string) => void;
   onStreamEnd?: () => void;
   confirm?: (message: string) => Promise<boolean>;
+  onRequestModeSwitch?: (mode: string) => void;
 }
 
 export class REPL {
@@ -36,13 +38,24 @@ export class REPL {
     this.deps = deps;
     registerCoreTools(deps.toolRegistry);
     registerExtraTools(deps.toolRegistry);
+    registerAgentTools(deps.toolRegistry, {
+      adapter: () => deps.providerRegistry.getActiveAdapter(),
+      memoryManager: deps.memoryManager,
+      skillRegistry: deps.skillRegistry,
+      providerRegistry: deps.providerRegistry,
+      loopConfig: deps.loopConfig,
+      permissionMode: () => deps.permissionMode.value,
+    });
   }
 
   async processInput(input: string): Promise<string> {
     const trimmed = input.trim();
     if (!trimmed) return "";
 
-    if (trimmed === "/exit" || trimmed === "/quit") return "exit";
+    if (trimmed === "/exit" || trimmed === "/quit") {
+      await this.summarizeOnExit();
+      return "exit";
+    }
 
     if (trimmed.startsWith("/")) {
       const skillTrigger = this.parseSkillTrigger(trimmed);
@@ -148,6 +161,26 @@ export class REPL {
       setPermissionMode: this.deps.setPermissionMode,
       output: this.deps.onOutput,
       confirm: this.deps.confirm,
+      requestModeSwitch: this.deps.onRequestModeSwitch,
     };
+  }
+
+  private async summarizeOnExit(): Promise<void> {
+    if (this.messages.length < 4) return;
+    try {
+      const adapter = this.deps.providerRegistry.getActiveAdapter();
+      // biome-ignore lint/complexity/useLiteralKeys: fileStore is private
+      const store = this.deps.memoryManager["fileStore"];
+      const summarizer = new SessionSummarizer(adapter, store);
+      const result = await summarizer.summarize(
+        this.messages,
+        new Date().toISOString().slice(0, 10),
+      );
+      if (result.isOk() && result.value) {
+        await summarizer.storeSummary(result.value);
+      }
+    } catch {
+      // Silent failure — never break exit
+    }
   }
 }
