@@ -10,12 +10,17 @@ import type {
 } from "../types.js";
 
 export const MINIMAX_MODELS: Record<string, ModelCapabilities> = {
-  "MiniMax-M2.7": { tools: true, vision: true, maxTokens: 16384, contextWindow: 1_000_000 },
-  "MiniMax-M2.7-highspeed": { tools: true, vision: false, maxTokens: 16384, contextWindow: 1_000_000 },
-  "MiniMax-M2.5": { tools: true, vision: true, maxTokens: 16384, contextWindow: 1_000_000 },
-  "MiniMax-M2.1": { tools: true, vision: false, maxTokens: 8192, contextWindow: 245_000 },
-  "abab6.5s-chat": { tools: true, vision: false, maxTokens: 4096, contextWindow: 245_000 },
-  "abab6.5g-chat": { tools: true, vision: false, maxTokens: 4096, contextWindow: 128_000 },
+  "MiniMax-M2.7": { tools: true, vision: true, maxTokens: 131_000, contextWindow: 205_000 },
+  "MiniMax-M2.7-highspeed": {
+    tools: true,
+    vision: true,
+    maxTokens: 131_000,
+    contextWindow: 205_000,
+  },
+  "MiniMax-M2.5": { tools: true, vision: true, maxTokens: 131_000, contextWindow: 205_000 },
+  "MiniMax-M2.1": { tools: true, vision: false, maxTokens: 8192, contextWindow: 200_000 },
+  "abab6.5s-chat": { tools: true, vision: false, maxTokens: 4096, contextWindow: 200_000 },
+  "abab6.5g-chat": { tools: true, vision: false, maxTokens: 4096, contextWindow: 200_000 },
 };
 
 const DEFAULT_MODEL = "MiniMax-M2.7";
@@ -31,7 +36,12 @@ export class MiniMaxAdapter implements ModelAdapter {
   constructor(config: { apiKey: string; groupId?: string; baseUrl?: string; model?: string }) {
     this.apiKey = config.apiKey;
     this.groupId = config.groupId;
-    this.baseUrl = config.baseUrl ?? "https://api.minimaxi.com/v1/chat/completions";
+    // Normalize baseUrl - strip trailing /v1 variants to avoid double paths
+    let base = config.baseUrl ?? "https://api.minimaxi.com/v1";
+    if (base.endsWith("/v1") || base.endsWith("/v1/")) {
+      base = base.replace(/\/v1\/?$/, "");
+    }
+    this.baseUrl = base + "/v1/chat/completions";
     this.id = config.model ?? DEFAULT_MODEL;
     this.capabilities = MINIMAX_MODELS[this.id] ?? MINIMAX_MODELS[DEFAULT_MODEL];
   }
@@ -112,6 +122,10 @@ export class MiniMaxAdapter implements ModelAdapter {
       body.tools = this.convertTools(options.tools);
     }
 
+    if (process.env.DEBUG) {
+      console.error("[MiniMax] Request:", JSON.stringify(body, null, 2));
+    }
+
     const response = await fetch(this.baseUrl, {
       method: "POST",
       headers: {
@@ -130,10 +144,7 @@ export class MiniMaxAdapter implements ModelAdapter {
     const decoder = new TextDecoder();
     let buffer = "";
 
-    const toolCallMap = new Map<
-      number,
-      { id: string; name: string; arguments: string }
-    >();
+    const toolCallMap = new Map<number, { id: string; name: string; arguments: string }>();
     let finishReason = "stop";
     let inputTokens = 0;
     let outputTokens = 0;
@@ -153,10 +164,15 @@ export class MiniMaxAdapter implements ModelAdapter {
         if (data === "[DONE]") continue;
 
         try {
-          const parsed = JSON.parse(data) as {
+          if (process.env.DEBUG) {
+            process.stdout.write("[MiniMax] Raw chunk: " + data + "\n");
+          }
+
+          let parsed: {
             choices?: Array<{
               delta?: {
                 content?: string;
+                role?: string;
                 tool_calls?: Array<{
                   index: number;
                   id?: string;
@@ -168,6 +184,13 @@ export class MiniMaxAdapter implements ModelAdapter {
             }>;
             usage?: { prompt_tokens: number; completion_tokens: number };
           };
+          try {
+            parsed = JSON.parse(data);
+          } catch (parseErr) {
+            console.error("[MiniMax] JSON parse error on data:", data.slice(0, 200));
+            console.error("[MiniMax] Parse error:", parseErr.message);
+            throw parseErr;
+          }
 
           const choice = parsed.choices?.[0];
           if (!choice) continue;
@@ -181,14 +204,15 @@ export class MiniMaxAdapter implements ModelAdapter {
           if (delta?.tool_calls) {
             for (const tc of delta.tool_calls) {
               const idx = tc.index;
-              if (!toolCallMap.has(idx)) {
-                toolCallMap.set(idx, {
+              let entry = toolCallMap.get(idx);
+              if (!entry) {
+                entry = {
                   id: tc.id ?? "",
                   name: tc.function?.name ?? "",
                   arguments: "",
-                });
+                };
+                toolCallMap.set(idx, entry);
               }
-              const entry = toolCallMap.get(idx)!;
               if (tc.id) entry.id = tc.id;
               if (tc.function?.name) entry.name = tc.function.name;
               if (tc.function?.arguments) entry.arguments += tc.function.arguments;
@@ -203,7 +227,8 @@ export class MiniMaxAdapter implements ModelAdapter {
             inputTokens = parsed.usage.prompt_tokens;
             outputTokens = parsed.usage.completion_tokens;
           }
-        } catch {
+        } catch (err) {
+          console.error("[MiniMax] Stream processing error:", err instanceof Error ? err.message : String(err), "Data was:", data?.slice(0, 200));
           // skip invalid chunks
         }
       }

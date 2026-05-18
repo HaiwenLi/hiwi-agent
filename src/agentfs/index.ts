@@ -1,7 +1,7 @@
-import Database from "better-sqlite3";
 import { AuditTrail } from "@/agentfs/audit-trail.js";
-import { VirtualFS } from "@/agentfs/virtual-fs.js";
 import { KvStore } from "@/agentfs/kv-store.js";
+import { VirtualFS } from "@/agentfs/virtual-fs.js";
+import Database from "better-sqlite3";
 
 export class AgentFS {
   public trail: AuditTrail;

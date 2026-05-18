@@ -33,9 +33,9 @@ export class KvStore {
   }
 
   get(key: string): unknown | undefined {
-    const row = this.db
-      .prepare("SELECT value FROM kv_store WHERE key = ?")
-      .get(key) as { value: string } | undefined;
+    const row = this.db.prepare("SELECT value FROM kv_store WHERE key = ?").get(key) as
+      | { value: string }
+      | undefined;
     if (!row) return undefined;
     return JSON.parse(row.value);
   }
@@ -44,12 +44,12 @@ export class KvStore {
     if (prefix) {
       const rows = this.db
         .prepare("SELECT key FROM kv_store WHERE key LIKE ? ORDER BY key")
-        .all(prefix + "%") as { key: string }[];
+        .all(`${prefix}%`) as { key: string }[];
       return rows.map((r) => r.key);
     }
-    const rows = this.db
-      .prepare("SELECT key FROM kv_store ORDER BY key")
-      .all() as { key: string }[];
+    const rows = this.db.prepare("SELECT key FROM kv_store ORDER BY key").all() as {
+      key: string;
+    }[];
     return rows.map((r) => r.key);
   }
 
@@ -58,9 +58,9 @@ export class KvStore {
   }
 
   has(key: string): boolean {
-    const row = this.db
-      .prepare("SELECT COUNT(*) as cnt FROM kv_store WHERE key = ?")
-      .get(key) as { cnt: number };
+    const row = this.db.prepare("SELECT COUNT(*) as cnt FROM kv_store WHERE key = ?").get(key) as {
+      cnt: number;
+    };
     return row.cnt > 0;
   }
 

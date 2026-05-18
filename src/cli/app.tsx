@@ -1,8 +1,8 @@
 import { Box, Text, render, useApp, useInput } from "ink";
 import React, { memo, useEffect, useState } from "react";
-import type { Command } from "./commands.js";
 import type { ModelEntry, TokenUsage } from "../types.js";
 import { ApiKeyInput } from "./api-key-input.js";
+import type { Command } from "./commands.js";
 import { ModelPicker } from "./model-picker.js";
 import { ProviderPicker } from "./provider-picker.js";
 
@@ -136,9 +136,8 @@ const StreamingLine = memo(function StreamingLine({ text }: { text: string }) {
 });
 
 const StatusBar = memo(function StatusBar({ data }: { data: TokenUsage }) {
-  const contextPercentStr = data.contextPercent != null
-    ? `${data.contextPercent.toFixed(1)}%`
-    : "?";
+  const contextPercentStr =
+    data.contextPercent != null ? `${data.contextPercent.toFixed(1)}%` : "?";
 
   let percentColor = "white";
   if (data.contextPercent != null) {
@@ -179,15 +178,17 @@ const SlashCommandPopover = memo(function SlashCommandPopover({
   if (commands.length === 0) return null;
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="blue" paddingX={1} marginBottom={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor="blue"
+      paddingX={1}
+      marginBottom={1}
+    >
       {commands.map((cmd, i) => (
         <Box key={cmd.name}>
-          <Text
-            color={i === activeIndex ? "blue" : "white"}
-            bold={i === activeIndex}
-          >
-            {i === activeIndex ? "> " : "  "}
-            /{cmd.name.padEnd(12)} — {cmd.description}
+          <Text color={i === activeIndex ? "blue" : "white"} bold={i === activeIndex}>
+            {i === activeIndex ? "> " : "  "}/{cmd.name.padEnd(12)} — {cmd.description}
           </Text>
         </Box>
       ))}

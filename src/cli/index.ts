@@ -13,9 +13,9 @@ import { SkillExecutor } from "../skills/executor.js";
 import { SkillLoader } from "../skills/loader.js";
 import { SkillRegistry } from "../skills/registry.js";
 import type { PermissionMode } from "../types.js";
-import { runPipeMode } from "./pipe.js";
 import { renderApp } from "./app.js";
 import { CommandRegistry } from "./commands.js";
+import { runPipeMode } from "./pipe.js";
 import { REPL } from "./repl.js";
 
 export interface CLIOptions {
@@ -148,11 +148,12 @@ export async function main(options: CLIOptions = {}): Promise<void> {
   const permissionMode: { value: PermissionMode } = { value: "normal" };
 
   // Create REPL first so we can pass its methods to app props
+  // Note: adapter is nullable but REPL accesses it via providerRegistry.getActiveAdapter()
   const repl = new REPL({
     commandRegistry,
     skillRegistry,
     toolRegistry,
-    adapter: null as any,
+    adapter: null,
     loopConfig: config.agent,
     permissionMode,
     setPermissionMode: (mode) => {
@@ -179,7 +180,9 @@ export async function main(options: CLIOptions = {}): Promise<void> {
         app.openProviderPicker(providers, providerRegistry.getActiveProvider());
       }
     },
-    onStatusBarUpdate: () => {}, // placeholder until app is created
+    onStatusBarUpdate: (data) => {
+      app.setStatusBarData(data);
+    },
   });
 
   const app = renderApp({
@@ -236,11 +239,6 @@ export async function main(options: CLIOptions = {}): Promise<void> {
     },
     fetchCommands: () => repl.fetchCommands(),
   });
-
-  // Wire status bar updates from REPL to app
-  (repl as any).deps.onStatusBarUpdate = (data: import("../types.js").TokenUsage) => {
-    app.setStatusBarData(data);
-  };
 
   await app.waitUntilExit();
   sessionStore.close();

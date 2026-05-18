@@ -70,21 +70,26 @@ export class Mem0Client {
       const memory = new Memory(options.oss);
       this.client = {
         add: (messages: unknown, opts?: unknown) =>
-          memory.add(messages as Parameters<typeof memory.add>[0], opts as Parameters<typeof memory.add>[1]),
+          memory.add(
+            messages as Parameters<typeof memory.add>[0],
+            opts as Parameters<typeof memory.add>[1],
+          ),
         search: async (query: string, opts?: unknown) => {
           const results = await memory.search(query, opts as Parameters<typeof memory.search>[1]);
           if (Array.isArray(results)) return { results };
           return results;
         },
         delete: (id: string) => memory.delete(id),
-        getAll: (opts?: unknown) =>
-          memory.getAll(opts as Parameters<typeof memory.getAll>[0]),
+        getAll: (opts?: unknown) => memory.getAll(opts as Parameters<typeof memory.getAll>[0]),
       };
       this.enabled = true;
     } else if (options.apiKey) {
       try {
         const { MemoryClient } = await import("mem0ai");
-        this.client = new MemoryClient({ apiKey: options.apiKey, host: options.host }) as Mem0SdkClient;
+        this.client = new MemoryClient({
+          apiKey: options.apiKey,
+          host: options.host,
+        }) as Mem0SdkClient;
         this.enabled = true;
       } catch {
         this.client = null;
@@ -133,7 +138,7 @@ export class Mem0Client {
         }>;
       };
 
-      const results = Array.isArray(response) ? response : response.results ?? [];
+      const results = Array.isArray(response) ? response : (response.results ?? []);
 
       return ok(
         results.map((r) => ({
@@ -180,7 +185,7 @@ export class Mem0Client {
         }>;
       };
 
-      const results = Array.isArray(response) ? response : response.results ?? [];
+      const results = Array.isArray(response) ? response : (response.results ?? []);
 
       return ok(
         results.map((r) => ({

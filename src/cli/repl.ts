@@ -213,21 +213,39 @@ export class REPL {
 
     // Track token usage
     const currentAdapter = this.deps.providerRegistry.getActiveAdapter();
-    const usage = (currentAdapter as any).getUsage?.() ?? (currentAdapter as any).usage;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- adapters may have hidden model/usage properties
+    const extAdapter = currentAdapter as typeof currentAdapter & {
+      getUsage?: () => {
+        inputTokens?: number;
+        outputTokens?: number;
+        input?: number;
+        output?: number;
+      };
+      model?: { id: string; contextWindow?: number };
+      provider?: string;
+    };
+    const usage = extAdapter.getUsage?.() ?? (extAdapter as { usage?: unknown }).usage;
     if (usage) {
-      this.cumulativeInputTokens += usage.inputTokens ?? usage.input ?? 0;
-      this.cumulativeOutputTokens += usage.outputTokens ?? usage.output ?? 0;
-      this.cumulativeCacheRead += usage.cacheReadTokens ?? usage.cacheRead ?? 0;
-      this.cumulativeCacheWrite += usage.cacheWriteTokens ?? usage.cacheWrite ?? 0;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const u = usage as {
+        inputTokens?: number;
+        outputTokens?: number;
+        input?: number;
+        output?: number;
+        cacheReadTokens?: number;
+        cacheWriteTokens?: number;
+      };
+      this.cumulativeInputTokens += u.inputTokens ?? u.input ?? 0;
+      this.cumulativeOutputTokens += u.outputTokens ?? u.output ?? 0;
+      this.cumulativeCacheRead += u.cacheReadTokens ?? 0;
+      this.cumulativeCacheWrite += u.cacheWriteTokens ?? 0;
     }
 
     // Update status bar
     const statusData = this.getStatusBarData();
-    const model = (currentAdapter as any).model;
-    const prov = (currentAdapter as any).provider;
-    statusData.modelName = model?.id ?? "unknown";
-    statusData.provider = prov ?? "unknown";
-    statusData.contextWindow = model?.contextWindow ?? 200000;
+    statusData.modelName = extAdapter.model?.id ?? "unknown";
+    statusData.provider = extAdapter.provider ?? "unknown";
+    statusData.contextWindow = extAdapter.model?.contextWindow ?? 200000;
     if (statusData.contextWindow && statusData.contextWindow > 0) {
       const totalTokens = statusData.inputTokens + statusData.outputTokens;
       statusData.contextPercent = (totalTokens / statusData.contextWindow) * 100;

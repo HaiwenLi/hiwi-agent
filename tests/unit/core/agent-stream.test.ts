@@ -45,10 +45,9 @@ describe("AgentLoop stream mode", () => {
     }
 
     const textDeltas = events.filter((e) => e.type === "text-delta");
-    // MockAdapter.stream() splits "Hello World!" into ["Hello", " World!"]
-    expect(textDeltas.length).toBe(2);
-    expect(textDeltas[0].text).toBe("Hello");
-    expect(textDeltas[1].text).toBe(" World!");
+    // MockAdapter.stream() yields full content as one text-delta per turn
+    expect(textDeltas.length).toBe(1);
+    expect(textDeltas[0].text).toBe("Hello World!");
   });
 
   it("handles tool calls from stream chunks", async () => {

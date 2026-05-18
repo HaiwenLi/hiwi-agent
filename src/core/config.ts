@@ -157,5 +157,35 @@ export async function saveModelSelection(
   }
 
   const updated = { ...existing, activeProvider: provider, activeModel: model };
-  await fs.writeFile(configPath, JSON.stringify(updated, null, 2) + "\n");
+  await fs.writeFile(configPath, `${JSON.stringify(updated, null, 2)}\n`);
+}
+
+export async function saveProviderConfig(
+  projectDir: string,
+  provider: string,
+  config: { apiKey?: string; baseUrl?: string },
+): Promise<void> {
+  const agentDir = path.join(projectDir, ".agent");
+  await fs.mkdir(agentDir, { recursive: true });
+
+  const configPath = path.join(agentDir, "config.json");
+  let existing: Record<string, unknown> = {};
+  try {
+    const content = await fs.readFile(configPath, "utf-8");
+    existing = JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    // file doesn't exist yet
+  }
+
+  const providers = (existing.providers as Record<string, unknown>) || {};
+  const providerConfig = { ...(providers[provider] as Record<string, unknown>), ...config };
+
+  const updated = {
+    ...existing,
+    providers: {
+      ...providers,
+      [provider]: providerConfig,
+    },
+  };
+  await fs.writeFile(configPath, `${JSON.stringify(updated, null, 2)}\n`);
 }

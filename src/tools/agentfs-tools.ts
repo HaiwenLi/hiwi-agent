@@ -43,7 +43,11 @@ export function createAgentFSTools(agentfs: AgentFS): Tool[] {
         const { path, content } = input as { path: string; content: string };
         try {
           agentfs.fs.writeFile(path, content);
-          return { toolCallId: "", content: `Wrote ${content.length} bytes to ${path}`, isError: false };
+          return {
+            toolCallId: "",
+            content: `Wrote ${content.length} bytes to ${path}`,
+            isError: false,
+          };
         } catch (err) {
           return { toolCallId: "", content: String(err), isError: true };
         }
@@ -95,7 +99,8 @@ export function createAgentFSTools(agentfs: AgentFS): Tool[] {
         const { path } = input as { path: string };
         try {
           const stat = agentfs.fs.stat(path);
-          const typeStr = stat.type === "directory" ? "directory" : stat.type === "symlink" ? "symlink" : "file";
+          const typeStr =
+            stat.type === "directory" ? "directory" : stat.type === "symlink" ? "symlink" : "file";
           const lines = [
             `  Type: ${typeStr}`,
             `  Mode: ${stat.mode.toString(8)}`,
@@ -179,9 +184,7 @@ export function createAgentFSTools(agentfs: AgentFS): Tool[] {
         const { prefix } = input as { prefix?: string };
         try {
           const keys = agentfs.kv.list(prefix);
-          const content = keys.length > 0
-            ? keys.join("\n")
-            : "No keys found";
+          const content = keys.length > 0 ? keys.join("\n") : "No keys found";
           return { toolCallId: "", content, isError: false };
         } catch (err) {
           return { toolCallId: "", content: String(err), isError: true };

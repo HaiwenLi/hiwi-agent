@@ -1,5 +1,5 @@
-import type { AgentFS } from "../agentfs/index.js";
 import type { ProviderRegistry } from "../adapters/registry.js";
+import type { AgentFS } from "../agentfs/index.js";
 import type { ToolRegistry } from "../core/tools.js";
 import type { MemoryManager } from "../memory/manager.js";
 import type { SkillRegistry } from "../skills/registry.js";

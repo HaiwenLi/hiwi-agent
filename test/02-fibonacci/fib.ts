@@ -8,10 +8,16 @@
  * 时间复杂度 O(n)，空间复杂度 O(n)
  */
 export function fibMemo(n: number): bigint {
-  // TODO: 实现记忆化递归
-  // 提示：使用 new Map<number, bigint>() 存储已计算的值
-  // 注意：n 可能为 0
-  return 0n;
+  const cache = new Map<number, bigint>();
+  function fib(n: number): bigint {
+    if (n === 0) return 0n;
+    if (n === 1) return 1n;
+    if (cache.has(n)) return cache.get(n)!;
+    const result = fib(n - 1) + fib(n - 2);
+    cache.set(n, result);
+    return result;
+  }
+  return fib(n);
 }
 
 /**
@@ -20,10 +26,13 @@ export function fibMemo(n: number): bigint {
  * 时间复杂度 O(n)，空间复杂度 O(1)
  */
 export function fibIterative(n: number): bigint {
-  // TODO: 实现迭代法
-  // 提示：只用两个变量保存前两个值
-  // 注意处理 n = 0, 1 的边界情况
-  return 0n;
+  if (n === 0) return 0n;
+  if (n === 1) return 1n;
+  let a = 0n, b = 1n;
+  for (let i = 2; i <= n; i++) {
+    [a, b] = [b, a + b];
+  }
+  return b;
 }
 
 /**
@@ -31,11 +40,55 @@ export function fibIterative(n: number): bigint {
  * 利用矩阵 [[1,1],[1,0]]^n 的左上角元素即 F(n)
  * 时间复杂度 O(log n)，空间复杂度 O(log n)
  */
+type Matrix = [[bigint, bigint], [bigint, bigint]];
+
+function multiply(a: Matrix, b: Matrix): Matrix {
+  return [
+    [a[0][0] * b[0][0] + a[0][1] * b[1][0], a[0][0] * b[0][1] + a[0][1] * b[1][1]],
+    [a[1][0] * b[0][0] + a[1][1] * b[1][0], a[1][0] * b[0][1] + a[1][1] * b[1][1]],
+  ];
+}
+
+function matrixPower(m: Matrix, n: number): Matrix {
+  if (n === 0) return [[1n, 0n], [0n, 1n]];
+  if (n === 1) return m;
+  let result: Matrix = [[1n, 0n], [0n, 1n]];
+  let base: Matrix = m;
+  let exp = n;
+  while (exp > 0) {
+    if (exp & 1) {
+      result = multiply(result, base);
+    }
+    base = multiply(base, base);
+    exp >>= 1;
+  }
+  return result;
+}
+
 export function fibMatrix(n: number): bigint {
-  // TODO: 实现矩阵快速幂
-  // 提示：实现一个 2x2 矩阵乘法函数
-  // 然后使用快速幂算法计算矩阵的 n 次幂
-  return 0n;
+  // 基础矩阵 [[1,1],[1,0]]
+  let result0 = 1n, result1 = 0n, result2 = 0n, result3 = 1n;
+  let base0 = 1n, base1 = 1n, base2 = 1n, base3 = 0n;
+  
+  let exp = n;
+  while (exp > 0) {
+    if (exp & 1n) {
+      const r0 = result0 * base0 + result1 * base2;
+      const r1 = result0 * base1 + result1 * base3;
+      const r2 = result2 * base0 + result3 * base2;
+      const r3 = result2 * base1 + result3 * base3;
+      result0 = r0; result1 = r1; result2 = r2; result3 = r3;
+    }
+    const b0 = base0 * base0 + base1 * base2;
+    const b1 = base0 * base1 + base1 * base3;
+    const b2 = base2 * base0 + base3 * base2;
+    const b3 = base2 * base1 + base3 * base3;
+    base0 = b0; base1 = b1; base2 = b2; base3 = b3;
+    exp >>= 1n;
+  }
+  
+  // result = [[F(n+1), F(n)], [F(n), F(n-1)]] → result0[1] = F(n)
+  return result1;
 }
 
 /**
@@ -43,15 +96,21 @@ export function fibMatrix(n: number): bigint {
  * 每次调用 next() 返回下一个斐波那契数
  */
 export function* fibGenerator(): Generator<bigint> {
-  // TODO: 实现生成器
-  // 提示：使用无限循环 yield 每个值
+  let a = 0n, b = 1n;
+  while (true) {
+    yield a;
+    [a, b] = [b, a + b];
+  }
 }
 
 /**
  * 获取斐波那契数列的前 n 项（使用生成器）
  */
 export function fibSequence(n: number): bigint[] {
-  // TODO: 使用 fibGenerator 获取前 n 项
   const result: bigint[] = [];
+  const gen = fibGenerator();
+  for (let i = 0; i < n; i++) {
+    result.push(gen.next().value!);
+  }
   return result;
 }

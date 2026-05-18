@@ -1,7 +1,7 @@
-import { buildCatalog, type ProviderModelCatalog } from "./model-catalog.js";
 import type { AgentConfig, ModelAdapter, ModelEntry, ModelInfo, ProviderConfig } from "../types.js";
 import { AnthropicAdapter } from "./anthropic.js";
 import { MiniMaxAdapter } from "./minimax.js";
+import { type ProviderModelCatalog, buildCatalog } from "./model-catalog.js";
 import { OllamaAdapter } from "./ollama.js";
 import { OpenAICompatAdapter } from "./openai-compat.js";
 import { ZhipuAdapter } from "./zhipu.js";
@@ -45,6 +45,10 @@ export class ProviderRegistry {
 
   setModel(modelId: string): void {
     this.activeModel = modelId;
+  }
+
+  updateProviderConfig(providerName: string, config: ProviderConfig): void {
+    this.config.providers[providerName] = config;
   }
 
   setModelWithProvider(modelId: string): void {
@@ -100,6 +104,7 @@ export class ProviderRegistry {
         return new ZhipuAdapter({ apiKey, baseUrl, model: this.activeModel });
 
       case "minimax":
+      case "minimaxi":
         if (!apiKey) throw new Error(`No API key for provider: ${providerName}`);
         return new MiniMaxAdapter({
           apiKey,

@@ -10,15 +10,18 @@ import type {
 } from "../types.js";
 
 export const ZHIPU_MODELS: Record<string, ModelCapabilities> = {
-  "glm-4-plus": { tools: true, vision: true, maxTokens: 4096, contextWindow: 128_000 },
-  "glm-4-flash": { tools: true, vision: false, maxTokens: 4096, contextWindow: 128_000 },
-  "glm-4": { tools: true, vision: true, maxTokens: 4096, contextWindow: 128_000 },
-  "glm-4.7": { tools: true, vision: true, maxTokens: 4096, contextWindow: 128_000 },
-  "glm-4v": { tools: false, vision: true, maxTokens: 4096, contextWindow: 8_192 },
-  "glm-3-turbo": { tools: true, vision: false, maxTokens: 4096, contextWindow: 32_000 },
+  "glm-5": { tools: true, vision: true, maxTokens: 128_000, contextWindow: 200_000 },
+  "glm-5.1": { tools: true, vision: true, maxTokens: 128_000, contextWindow: 200_000 },
+  "glm-turbo": { tools: true, vision: true, maxTokens: 128_000, contextWindow: 200_000 },
+  "glm-4-plus": { tools: true, vision: true, maxTokens: 4096, contextWindow: 200_000 },
+  "glm-4-flash": { tools: true, vision: false, maxTokens: 4096, contextWindow: 200_000 },
+  "glm-4": { tools: true, vision: true, maxTokens: 4096, contextWindow: 200_000 },
+  "glm-4.7": { tools: true, vision: true, maxTokens: 128_000, contextWindow: 200_000 },
+  "glm-4v": { tools: false, vision: true, maxTokens: 4096, contextWindow: 200_000 },
+  "glm-3-turbo": { tools: true, vision: false, maxTokens: 4096, contextWindow: 200_000 },
 };
 
-const DEFAULT_MODEL = "glm-4-flash";
+const DEFAULT_MODEL = "glm-5";
 
 const GLM_ERROR_MAP: Record<string, string> = {
   "1301": "Content filtered by safety system. Rephrase your request.",
@@ -140,10 +143,7 @@ export class ZhipuAdapter implements ModelAdapter {
     let buffer = "";
 
     // Accumulate streaming tool call fragments
-    const toolCallMap = new Map<
-      number,
-      { id: string; name: string; arguments: string }
-    >();
+    const toolCallMap = new Map<number, { id: string; name: string; arguments: string }>();
     let finishReason = "stop";
     let inputTokens = 0;
     let outputTokens = 0;
@@ -193,14 +193,15 @@ export class ZhipuAdapter implements ModelAdapter {
           if (delta?.tool_calls) {
             for (const tc of delta.tool_calls) {
               const idx = tc.index;
-              if (!toolCallMap.has(idx)) {
-                toolCallMap.set(idx, {
+              let entry = toolCallMap.get(idx);
+              if (!entry) {
+                entry = {
                   id: tc.id ?? "",
                   name: tc.function?.name ?? "",
                   arguments: "",
-                });
+                };
+                toolCallMap.set(idx, entry);
               }
-              const entry = toolCallMap.get(idx)!;
               if (tc.id) entry.id = tc.id;
               if (tc.function?.name) entry.name = tc.function.name;
               if (tc.function?.arguments) entry.arguments += tc.function.arguments;
@@ -240,9 +241,7 @@ export class ZhipuAdapter implements ModelAdapter {
     };
   }
 
-  private convertMessages(
-    messages: Message[],
-  ): Array<Record<string, unknown>> {
+  private convertMessages(messages: Message[]): Array<Record<string, unknown>> {
     return messages.map((msg) => {
       switch (msg.role) {
         case "system":

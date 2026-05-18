@@ -10,20 +10,26 @@ import type {
 } from "../types.js";
 
 export const OPENAI_COMPAT_MODELS: Record<string, ModelCapabilities> = {
+  "kimi-k2.6": { tools: true, vision: true, maxTokens: 33_000, contextWindow: 262_000 },
+  "kimi-k2.5": { tools: true, vision: true, maxTokens: 33_000, contextWindow: 262_000 },
+  "kimi-k2-thinking": { tools: true, vision: false, maxTokens: 33_000, contextWindow: 262_000 },
+  "deepseek-v4-pro[1m]": { tools: true, vision: false, maxTokens: 384_000, contextWindow: 1000_000 },
+  "deepseek-v4-pro": { tools: true, vision: false, maxTokens: 384_000, contextWindow: 1000_000 },
+  "deepseek-v4-flash": { tools: true, vision: false, maxTokens: 384_000, contextWindow: 1000_000 },
   "gpt-4o": { tools: true, vision: true, maxTokens: 16384, contextWindow: 128_000 },
   "gpt-4o-mini": { tools: true, vision: true, maxTokens: 16384, contextWindow: 128_000 },
   "deepseek-v3": { tools: true, vision: false, maxTokens: 8192, contextWindow: 128_000 },
   "deepseek-r1": { tools: true, vision: false, maxTokens: 8192, contextWindow: 128_000 },
   "glm-4-plus": { tools: true, vision: true, maxTokens: 8192, contextWindow: 128_000 },
   "glm-4-flash": { tools: true, vision: true, maxTokens: 4096, contextWindow: 128_000 },
-  "moonshot-v1-128k": { tools: true, vision: false, maxTokens: 8192, contextWindow: 128_000 },
+  "moonshot-v1-128k": { tools: true, vision: false, maxTokens: 8192, contextWindow: 200_000 },
   "abab-7": { tools: true, vision: false, maxTokens: 8192, contextWindow: 128_000 },
 };
 
 const DEFAULT_CAPABILITIES: ModelCapabilities = {
   tools: true,
   vision: false,
-  maxTokens: 8192,
+  maxTokens: 16384,
   contextWindow: 128_000,
 };
 

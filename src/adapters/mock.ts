@@ -66,10 +66,8 @@ export class MockAdapter implements ModelAdapter {
       }
     }
 
-    const words = response.content.split(" ");
-    for (let i = 0; i < words.length; i++) {
-      const text = i === 0 ? words[i] : ` ${words[i]}`;
-      yield { type: "text-delta", text };
+    if (response.content) {
+      yield { type: "text-delta", text: response.content };
     }
 
     yield {

@@ -3,13 +3,23 @@ import type Database from "better-sqlite3";
 // ─── Type constants ─────────────────────────────────────────────
 
 import {
-  S_IFMT, S_IFREG, S_IFDIR, S_IFLNK,
-  DEFAULT_FILE_MODE, DEFAULT_DIR_MODE, DEFAULT_CHUNK_SIZE,
+  DEFAULT_CHUNK_SIZE,
+  DEFAULT_DIR_MODE,
+  DEFAULT_FILE_MODE,
+  S_IFDIR,
+  S_IFLNK,
+  S_IFMT,
+  S_IFREG,
 } from "./schema.js";
 
 export {
-  S_IFMT, S_IFREG, S_IFDIR, S_IFLNK,
-  DEFAULT_FILE_MODE, DEFAULT_DIR_MODE, DEFAULT_CHUNK_SIZE,
+  S_IFMT,
+  S_IFREG,
+  S_IFDIR,
+  S_IFLNK,
+  DEFAULT_FILE_MODE,
+  DEFAULT_DIR_MODE,
+  DEFAULT_CHUNK_SIZE,
 };
 
 // ─── Exported types ─────────────────────────────────────────────
@@ -108,9 +118,7 @@ export class VirtualFS {
       .run(DEFAULT_DIR_MODE, now, now, now);
 
     // Seed root path in config
-    this.db
-      .prepare("INSERT OR IGNORE INTO fs_config (key, value) VALUES ('root', '/')")
-      .run();
+    this.db.prepare("INSERT OR IGNORE INTO fs_config (key, value) VALUES ('root', '/')").run();
   }
 
   // ─── Path helpers ────────────────────────────────────────────
@@ -156,10 +164,9 @@ export class VirtualFS {
         .get(currentId, part) as { inode_id: number } | undefined;
 
       if (!row) {
-        throw Object.assign(
-          new Error(`ENOENT: no such file or directory, resolve '${filePath}'`),
-          { code: "ENOENT" },
-        );
+        throw Object.assign(new Error(`ENOENT: no such file or directory, resolve '${filePath}'`), {
+          code: "ENOENT",
+        });
       }
       currentId = row.inode_id;
     }
@@ -186,10 +193,9 @@ export class VirtualFS {
         .get(currentId, part) as { inode_id: number } | undefined;
 
       if (!row) {
-        throw Object.assign(
-          new Error(`ENOENT: no such file or directory '${filePath}'`),
-          { code: "ENOENT" },
-        );
+        throw Object.assign(new Error(`ENOENT: no such file or directory '${filePath}'`), {
+          code: "ENOENT",
+        });
       }
       currentId = row.inode_id;
     }
@@ -273,10 +279,9 @@ export class VirtualFS {
   ): void {
     const normalized = this.normalizePath(filePath);
     if (normalized === "/") {
-      throw Object.assign(
-        new Error(`EISDIR: illegal operation on a directory '${filePath}'`),
-        { code: "EISDIR" },
-      );
+      throw Object.assign(new Error(`EISDIR: illegal operation on a directory '${filePath}'`), {
+        code: "EISDIR",
+      });
     }
 
     const parentDir = this.getParentDirPath(normalized);
@@ -297,10 +302,9 @@ export class VirtualFS {
 
     if (existing) {
       if (existing.type === "directory") {
-        throw Object.assign(
-          new Error(`EISDIR: illegal operation on a directory '${filePath}'`),
-          { code: "EISDIR" },
-        );
+        throw Object.assign(new Error(`EISDIR: illegal operation on a directory '${filePath}'`), {
+          code: "EISDIR",
+        });
       }
       // Overwrite: clear old data, update inode, write new chunks
       const doOverwrite = this.db.transaction(() => {
@@ -323,23 +327,20 @@ export class VirtualFS {
 
   readFile(filePath: string, encoding?: "utf-8" | "buffer"): string | Buffer {
     const inodeId = this.lookupInode(filePath);
-    const inode = this.db
-      .prepare("SELECT type FROM fs_inode WHERE id = ?")
-      .get(inodeId) as { type: string };
+    const inode = this.db.prepare("SELECT type FROM fs_inode WHERE id = ?").get(inodeId) as {
+      type: string;
+    };
 
     if (inode.type !== "file") {
-      throw Object.assign(
-        new Error(`ENOENT: no such file or directory '${filePath}'`),
-        { code: "ENOENT" },
-      );
+      throw Object.assign(new Error(`ENOENT: no such file or directory '${filePath}'`), {
+        code: "ENOENT",
+      });
     }
 
     const content = this.readChunks(inodeId);
 
     // Update atime
-    this.db
-      .prepare("UPDATE fs_inode SET atime = ? WHERE id = ?")
-      .run(Date.now(), inodeId);
+    this.db.prepare("UPDATE fs_inode SET atime = ? WHERE id = ?").run(Date.now(), inodeId);
 
     if (encoding === "utf-8") {
       return content.toString("utf-8");
@@ -349,28 +350,20 @@ export class VirtualFS {
 
   readdir(dirPath: string): FSDentry[] {
     const inodeId = this.lookupInode(dirPath);
-    const inode = this.db
-      .prepare("SELECT type FROM fs_inode WHERE id = ?")
-      .get(inodeId) as { type: string };
+    const inode = this.db.prepare("SELECT type FROM fs_inode WHERE id = ?").get(inodeId) as {
+      type: string;
+    };
 
     if (inode.type !== "directory") {
-      throw Object.assign(
-        new Error(`ENOTDIR: not a directory '${dirPath}'`),
-        { code: "ENOTDIR" },
-      );
+      throw Object.assign(new Error(`ENOTDIR: not a directory '${dirPath}'`), { code: "ENOTDIR" });
     }
 
     return this.db
-      .prepare(
-        "SELECT id, name, inode_id FROM fs_dentry WHERE parent_id = ? ORDER BY name",
-      )
+      .prepare("SELECT id, name, inode_id FROM fs_dentry WHERE parent_id = ? ORDER BY name")
       .all(inodeId) as FSDentry[];
   }
 
-  mkdir(
-    dirPath: string,
-    options?: { mode?: number; recursive?: boolean },
-  ): void {
+  mkdir(dirPath: string, options?: { mode?: number; recursive?: boolean }): void {
     const normalized = this.normalizePath(dirPath);
     if (normalized === "/") return; // root already exists
 
@@ -390,10 +383,9 @@ export class VirtualFS {
       .get(parentInode, name);
 
     if (existing) {
-      throw Object.assign(
-        new Error(`EEXIST: file already exists '${dirPath}'`),
-        { code: "EEXIST" },
-      );
+      throw Object.assign(new Error(`EEXIST: file already exists '${dirPath}'`), {
+        code: "EEXIST",
+      });
     }
 
     const now = Date.now();
@@ -403,22 +395,16 @@ export class VirtualFS {
 
   rmdir(dirPath: string): void {
     if (dirPath === "/" || dirPath === "") {
-      throw Object.assign(
-        new Error(`EBUSY: cannot remove root directory`),
-        { code: "EBUSY" },
-      );
+      throw Object.assign(new Error("EBUSY: cannot remove root directory"), { code: "EBUSY" });
     }
 
     const inodeId = this.lookupInode(dirPath);
-    const inode = this.db
-      .prepare("SELECT type FROM fs_inode WHERE id = ?")
-      .get(inodeId) as { type: string };
+    const inode = this.db.prepare("SELECT type FROM fs_inode WHERE id = ?").get(inodeId) as {
+      type: string;
+    };
 
     if (inode.type !== "directory") {
-      throw Object.assign(
-        new Error(`ENOTDIR: not a directory '${dirPath}'`),
-        { code: "ENOTDIR" },
-      );
+      throw Object.assign(new Error(`ENOTDIR: not a directory '${dirPath}'`), { code: "ENOTDIR" });
     }
 
     // Check directory is empty
@@ -427,10 +413,9 @@ export class VirtualFS {
       .get(inodeId) as { cnt: number };
 
     if (count.cnt > 0) {
-      throw Object.assign(
-        new Error(`ENOTEMPTY: directory not empty '${dirPath}'`),
-        { code: "ENOTEMPTY" },
-      );
+      throw Object.assign(new Error(`ENOTEMPTY: directory not empty '${dirPath}'`), {
+        code: "ENOTEMPTY",
+      });
     }
 
     // Delete dentry linking to this directory
@@ -445,22 +430,18 @@ export class VirtualFS {
 
   unlink(filePath: string): void {
     if (filePath === "/" || filePath === "") {
-      throw Object.assign(
-        new Error(`EPERM: operation not permitted '${filePath}'`),
-        { code: "EPERM" },
-      );
+      throw Object.assign(new Error(`EPERM: operation not permitted '${filePath}'`), {
+        code: "EPERM",
+      });
     }
 
     const inodeId = this.lookupInode(filePath);
-    const inode = this.db
-      .prepare("SELECT type FROM fs_inode WHERE id = ?")
-      .get(inodeId) as { type: string };
+    const inode = this.db.prepare("SELECT type FROM fs_inode WHERE id = ?").get(inodeId) as {
+      type: string;
+    };
 
     if (inode.type === "directory") {
-      throw Object.assign(
-        new Error(`EISDIR: is a directory '${filePath}'`),
-        { code: "EISDIR" },
-      );
+      throw Object.assign(new Error(`EISDIR: is a directory '${filePath}'`), { code: "EISDIR" });
     }
 
     // Remove data, symlink entry, dentry, inode
@@ -480,10 +461,7 @@ export class VirtualFS {
 
   rename(oldPath: string, newPath: string): void {
     if (oldPath === "/" || oldPath === "") {
-      throw Object.assign(
-        new Error(`EBUSY: cannot rename root directory`),
-        { code: "EBUSY" },
-      );
+      throw Object.assign(new Error("EBUSY: cannot rename root directory"), { code: "EBUSY" });
     }
 
     const oldNorm = this.normalizePath(oldPath);
@@ -496,10 +474,9 @@ export class VirtualFS {
       .get(oldParentId, oldName) as { id: number; inode_id: number } | undefined;
 
     if (!oldDentry) {
-      throw Object.assign(
-        new Error(`ENOENT: no such file or directory '${oldPath}'`),
-        { code: "ENOENT" },
-      );
+      throw Object.assign(new Error(`ENOENT: no such file or directory '${oldPath}'`), {
+        code: "ENOENT",
+      });
     }
 
     // Ensure parent of destination exists
@@ -518,16 +495,13 @@ export class VirtualFS {
       .get(newParentId, newName);
 
     if (existing) {
-      throw Object.assign(
-        new Error(`EEXIST: file already exists '${newPath}'`),
-        { code: "EEXIST" },
-      );
+      throw Object.assign(new Error(`EEXIST: file already exists '${newPath}'`), {
+        code: "EEXIST",
+      });
     }
 
     // Remove old dentry
-    this.db
-      .prepare("DELETE FROM fs_dentry WHERE id = ?")
-      .run(oldDentry.id);
+    this.db.prepare("DELETE FROM fs_dentry WHERE id = ?").run(oldDentry.id);
 
     // Create new dentry pointing to the same inode
     this.db
@@ -543,10 +517,9 @@ export class VirtualFS {
   symlink(target: string, linkPath: string): void {
     const normalized = this.normalizePath(linkPath);
     if (normalized === "/") {
-      throw Object.assign(
-        new Error(`EPERM: operation not permitted '${linkPath}'`),
-        { code: "EPERM" },
-      );
+      throw Object.assign(new Error(`EPERM: operation not permitted '${linkPath}'`), {
+        code: "EPERM",
+      });
     }
 
     const parentDir = this.getParentDirPath(normalized);
@@ -559,10 +532,9 @@ export class VirtualFS {
       .prepare("SELECT id FROM fs_dentry WHERE parent_id = ? AND name = ?")
       .get(parentInode, name);
     if (existing) {
-      throw Object.assign(
-        new Error(`EEXIST: file already exists '${linkPath}'`),
-        { code: "EEXIST" },
-      );
+      throw Object.assign(new Error(`EEXIST: file already exists '${linkPath}'`), {
+        code: "EEXIST",
+      });
     }
 
     const now = Date.now();
@@ -572,22 +544,19 @@ export class VirtualFS {
     this.createDentry(parentInode, name, inodeId);
 
     // Create symlink target entry
-    this.db
-      .prepare("INSERT INTO fs_symlink (inode_id, target) VALUES (?, ?)")
-      .run(inodeId, target);
+    this.db.prepare("INSERT INTO fs_symlink (inode_id, target) VALUES (?, ?)").run(inodeId, target);
   }
 
   readlink(linkPath: string): string {
     const inodeId = this.lookupInode(linkPath);
-    const inode = this.db
-      .prepare("SELECT type FROM fs_inode WHERE id = ?")
-      .get(inodeId) as { type: string };
+    const inode = this.db.prepare("SELECT type FROM fs_inode WHERE id = ?").get(inodeId) as {
+      type: string;
+    };
 
     if (inode.type !== "symlink") {
-      throw Object.assign(
-        new Error(`EINVAL: not a symbolic link '${linkPath}'`),
-        { code: "EINVAL" },
-      );
+      throw Object.assign(new Error(`EINVAL: not a symbolic link '${linkPath}'`), {
+        code: "EINVAL",
+      });
     }
 
     const row = this.db

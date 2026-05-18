@@ -57,33 +57,39 @@ export class AuditTrail {
       RETURNING id
     `);
     const now = Math.floor(Date.now() / 1000);
-    const row = stmt.get(name, parameters ? JSON.stringify(parameters) : null, now) as { id: number };
+    const row = stmt.get(name, parameters ? JSON.stringify(parameters) : null, now) as {
+      id: number;
+    };
     return row.id;
   }
 
   success(id: number, result?: string): boolean {
     const now = Math.floor(Date.now() / 1000);
-    const info = this.db.prepare(`
+    const info = this.db
+      .prepare(`
       UPDATE tool_calls
       SET status = 'success',
           result = ?,
           completed_at = ?,
           duration_ms = (? - started_at) * 1000
       WHERE id = ?
-    `).run(result ?? null, now, now, id);
+    `)
+      .run(result ?? null, now, now, id);
     return info.changes > 0;
   }
 
   error(id: number, error: string): boolean {
     const now = Math.floor(Date.now() / 1000);
-    const info = this.db.prepare(`
+    const info = this.db
+      .prepare(`
       UPDATE tool_calls
       SET status = 'error',
           error = ?,
           completed_at = ?,
           duration_ms = (? - started_at) * 1000
       WHERE id = ?
-    `).run(error, now, now, id);
+    `)
+      .run(error, now, now, id);
     return info.changes > 0;
   }
 
@@ -116,7 +122,9 @@ export class AuditTrail {
   }
 
   get(id: number): ToolCallRecord | undefined {
-    const row = this.db.prepare("SELECT * FROM tool_calls WHERE id = ?").get(id) as ToolCallRecord | undefined;
+    const row = this.db.prepare("SELECT * FROM tool_calls WHERE id = ?").get(id) as
+      | ToolCallRecord
+      | undefined;
     return row ?? undefined;
   }
 

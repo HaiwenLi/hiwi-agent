@@ -1,3 +1,4 @@
+import type { AgentFS } from "../agentfs/index.js";
 import { AutoExtractor } from "../memory/auto-extract.js";
 import type { MemoryFileStore } from "../memory/file-store.js";
 import type {
@@ -6,12 +7,11 @@ import type {
   Message,
   ModelAdapter,
   PermissionMode,
+  TokenUsage,
   ToolCall,
   ToolContext,
   ToolResult,
-  TokenUsage,
 } from "../types.js";
-import type { AgentFS } from "../agentfs/index.js";
 import { assembleSystemPrompt } from "./prompt/assembler.js";
 import type { ToolRegistry } from "./tools.js";
 
@@ -136,7 +136,7 @@ export class AgentLoop {
 
       let content = "";
       const toolCalls: ToolCall[] = [];
-      let finishReason: string = "stop";
+      let finishReason = "stop";
       let usage: TokenUsage | undefined;
 
       const chatOptions = {
@@ -182,9 +182,9 @@ export class AgentLoop {
         }
       }
 
-      emptyResponseCount = 0;
-
-      if (finishReason !== "tool-calls" || toolCalls.length === 0) {
+      // Check if we should stop or continue with tool execution
+      // Only stop early if there's no content AND no tool calls
+      if (finishReason !== "tool-calls" && toolCalls.length === 0) {
         if (!content && toolCalls.length === 0) {
           emptyResponseCount++;
           if (emptyResponseCount <= 1) {
@@ -219,6 +219,7 @@ export class AgentLoop {
         return;
       }
 
+      // We have tool calls to execute - push assistant message with tool calls
       currentMessages.push({
         role: "assistant",
         content,
@@ -264,6 +265,9 @@ export class AgentLoop {
     } else {
       yield { type: "finish", finishReason: "max-loops" };
     }
+
+    // Yield final messages state so caller can update their message history
+    yield { type: "messages", messages: currentMessages };
   }
 
   private async executeTool(

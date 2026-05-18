@@ -152,10 +152,11 @@ export class OllamaAdapter implements ModelAdapter {
             if (chunk.message?.tool_calls) {
               for (let i = 0; i < chunk.message.tool_calls.length; i++) {
                 const tc = chunk.message.tool_calls[i];
-                if (!toolCallMap.has(i)) {
-                  toolCallMap.set(i, { name: "", arguments: "" });
+                let entry = toolCallMap.get(i);
+                if (!entry) {
+                  entry = { name: "", arguments: "" };
+                  toolCallMap.set(i, entry);
                 }
-                const entry = toolCallMap.get(i)!;
                 if (tc.function.name) entry.name = tc.function.name;
                 if (tc.function.arguments) {
                   entry.arguments += JSON.stringify(tc.function.arguments);
