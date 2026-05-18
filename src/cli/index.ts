@@ -2,7 +2,7 @@
 import os from "node:os";
 import path from "node:path";
 import { ProviderRegistry } from "../adapters/registry.js";
-import { loadConfig, saveModelSelection } from "../core/config.js";
+import { loadConfig, saveModelSelection, saveProviderConfig } from "../core/config.js";
 import { ToolRegistry } from "../core/tools.js";
 import { MCPServer } from "../mcp/server.js";
 import { MemoryFileStore } from "../memory/file-store.js";
@@ -13,14 +13,17 @@ import { SkillExecutor } from "../skills/executor.js";
 import { SkillLoader } from "../skills/loader.js";
 import { SkillRegistry } from "../skills/registry.js";
 import type { PermissionMode } from "../types.js";
+import { runPipeMode } from "./pipe.js";
 import { renderApp } from "./app.js";
 import { CommandRegistry } from "./commands.js";
 import { REPL } from "./repl.js";
 
 export interface CLIOptions {
   mcp?: boolean;
+  pipe?: boolean;
   port?: number;
   debug?: boolean;
+  yolo?: boolean;
 }
 
 function parseArgs(argv: string[]): CLIOptions {
@@ -29,7 +32,9 @@ function parseArgs(argv: string[]): CLIOptions {
     const arg = argv[i];
     if (arg === "--mcp") options.mcp = true;
     else if (arg === "--port" && argv[i + 1]) options.port = Number.parseInt(argv[++i]);
+    else if (arg === "--pipe") options.pipe = true;
     else if (arg === "--debug") options.debug = true;
+    else if (arg === "--yolo") options.yolo = true;
     else if (arg === "--help" || arg === "-h") {
       console.log(`hiwi-agent — Personal AI agent
 
@@ -37,6 +42,8 @@ Usage:
   hiwi-agent              Start interactive REPL
   hiwi-agent --mcp        Start MCP server (stdio)
   hiwi-agent --mcp --port <port>  Start MCP server (SSE)
+  hiwi-agent --pipe       Run with pipe input (no TUI, console I/O)
+  hiwi-agent --yolo       Enable YOLO mode (no tool restrictions)
   hiwi-agent --debug      Enable debug logging
   hiwi-agent --help       Show this help
 
@@ -123,10 +130,57 @@ export async function main(options: CLIOptions = {}): Promise<void> {
     return;
   }
 
+  if (options.pipe) {
+    await runPipeMode({
+      toolRegistry,
+      providerRegistry,
+      memoryManager,
+      sessionStore,
+      loopConfig: config.agent,
+      permissionMode: options.yolo ? "yolo" : "normal",
+    });
+    return;
+  }
+
   const commandRegistry = new CommandRegistry();
   commandRegistry.registerBuiltinCommands();
 
   const permissionMode: { value: PermissionMode } = { value: "normal" };
+
+  // Create REPL first so we can pass its methods to app props
+  const repl = new REPL({
+    commandRegistry,
+    skillRegistry,
+    toolRegistry,
+    adapter: null as any,
+    loopConfig: config.agent,
+    permissionMode,
+    setPermissionMode: (mode) => {
+      permissionMode.value = mode;
+    },
+    providerRegistry,
+    memoryManager,
+    sessionStore,
+    onOutput: (text) => app.addOutput(text),
+    onStreamChunk: (chunk) => app.addStreamChunk(chunk),
+    onStreamEnd: () => app.endStream(),
+    onThinkingChunk: (chunk) => app.addThinkingChunk(chunk),
+    onEndThinking: () => app.endThinking(),
+    onRequestModeSwitch: (mode) => {
+      if (mode === "model-picker") {
+        const catalog = providerRegistry.getModelCatalog();
+        app.openModelPicker(
+          catalog,
+          providerRegistry.getActiveModel(),
+          providerRegistry.getActiveProvider(),
+        );
+      } else if (mode === "provider-picker") {
+        const providers = Object.keys(providerRegistry.getModelCatalog());
+        app.openProviderPicker(providers, providerRegistry.getActiveProvider());
+      }
+    },
+    onStatusBarUpdate: () => {}, // placeholder until app is created
+  });
 
   const app = renderApp({
     onInput: async (text) => {
@@ -153,44 +207,40 @@ export async function main(options: CLIOptions = {}): Promise<void> {
         await saveModelSelection(projectDir, provider, providerRegistry.getActiveModel());
         app.addOutput(`Provider: ${provider}`);
       } catch (e: unknown) {
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        if (errorMsg.includes("API key") || errorMsg.includes("No API key")) {
+          app.addOutput(`Provider ${provider} requires API key`);
+          app.openApiKeyInput(provider);
+        } else {
+          app.addOutput(`Error: ${errorMsg}`);
+        }
+      }
+    },
+    onApiKeySubmit: async (provider, apiKey) => {
+      try {
+        await saveProviderConfig(projectDir, provider, { apiKey });
+        // Update the in-memory config so createAdapter can use it
+        providerRegistry.updateProviderConfig(provider, { apiKey });
+        providerRegistry.setProvider(provider);
+        const adapter = providerRegistry.createAdapter(provider);
+        providerRegistry.registerAdapter(provider, adapter);
+        await saveModelSelection(projectDir, provider, providerRegistry.getActiveModel());
+        app.addOutput(`API key saved for ${provider}`);
+        app.addOutput(`Provider: ${provider}`);
+      } catch (e: unknown) {
         app.addOutput(`Error: ${e instanceof Error ? e.message : String(e)}`);
       }
     },
     onPickerCancel: () => {
       app.addOutput("Cancelled.");
     },
+    fetchCommands: () => repl.fetchCommands(),
   });
 
-  const repl = new REPL({
-    commandRegistry,
-    skillRegistry,
-    toolRegistry,
-    adapter: providerRegistry.getActiveAdapter(),
-    loopConfig: config.agent,
-    permissionMode,
-    setPermissionMode: (mode) => {
-      permissionMode.value = mode;
-    },
-    providerRegistry,
-    memoryManager,
-    sessionStore,
-    onOutput: (text) => app.addOutput(text),
-    onStreamChunk: (chunk) => app.addStreamChunk(chunk),
-    onStreamEnd: () => app.endStream(),
-    onRequestModeSwitch: (mode) => {
-      if (mode === "model-picker") {
-        const catalog = providerRegistry.getModelCatalog();
-        app.openModelPicker(
-          catalog,
-          providerRegistry.getActiveModel(),
-          providerRegistry.getActiveProvider(),
-        );
-      } else if (mode === "provider-picker") {
-        const providers = Object.keys(providerRegistry.getModelCatalog());
-        app.openProviderPicker(providers, providerRegistry.getActiveProvider());
-      }
-    },
-  });
+  // Wire status bar updates from REPL to app
+  (repl as any).deps.onStatusBarUpdate = (data: import("../types.js").TokenUsage) => {
+    app.setStatusBarData(data);
+  };
 
   await app.waitUntilExit();
   sessionStore.close();

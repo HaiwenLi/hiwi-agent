@@ -24,6 +24,17 @@ export interface ToolResult {
 export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  contextPercent?: number | null;
+  contextWindow?: number;
+  modelName?: string;
+  provider?: string;
+}
+
+export interface StatusBarData {
+  tokens: TokenUsage;
+  visible: boolean;
 }
 
 // ─── Model Adapter Types ──────────────────────────────────────
@@ -121,6 +132,7 @@ export type AgentLoopEventType =
   | "step-finish"
   | "compaction"
   | "finish"
+  | "messages"
   | "error";
 
 export interface AgentLoopEvent {
@@ -133,6 +145,7 @@ export interface AgentLoopEvent {
   toolResult?: ToolResult;
   finishReason?: "completed" | "max-loops" | "interrupted" | "error";
   usage?: TokenUsage;
+  messages?: Message[];
 }
 
 export interface AgentLoopConfig {

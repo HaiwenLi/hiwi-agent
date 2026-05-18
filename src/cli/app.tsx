@@ -1,6 +1,8 @@
 import { Box, Text, render, useApp, useInput } from "ink";
 import React, { memo, useEffect, useState } from "react";
-import type { ModelEntry } from "../types.js";
+import type { Command } from "./commands.js";
+import type { ModelEntry, TokenUsage } from "../types.js";
+import { ApiKeyInput } from "./api-key-input.js";
 import { ModelPicker } from "./model-picker.js";
 import { ProviderPicker } from "./provider-picker.js";
 
@@ -8,13 +10,15 @@ export interface AppProps {
   onInput: (text: string) => Promise<void>;
   onModelSelect?: (modelId: string) => void;
   onProviderSelect?: (provider: string) => void;
+  onApiKeySubmit?: (provider: string, apiKey: string) => void;
   onPickerCancel?: () => void;
+  fetchCommands?: () => Promise<Command[]>;
 }
 
 export interface OutputLine {
   id: number;
   text: string;
-  role: "user" | "assistant" | "tool" | "system" | "error";
+  role: "user" | "assistant" | "tool" | "system" | "error" | "thinking";
   streaming?: boolean;
 }
 
@@ -23,6 +27,8 @@ export interface OutputLine {
 const streamState = {
   addLine: (_text: string, _role: OutputLine["role"]) => {},
   setStreaming: (_text: string) => {},
+  setStatusBarData: (_data: TokenUsage) => {},
+  commands: [] as Command[],
 };
 
 const modeState = {
@@ -32,6 +38,7 @@ const modeState = {
     _activeProvider: string,
   ) => {},
   openProviderPicker: (_providers: string[], _activeProvider: string) => {},
+  openApiKeyInput: (_provider: string) => {},
 };
 
 const roleColor = (role: string) => {
@@ -44,19 +51,73 @@ const roleColor = (role: string) => {
       return "yellow";
     case "error":
       return "red";
+    case "thinking":
+      return "gray";
     default:
       return "white";
   }
 };
 
+function formatTokens(count: number): string {
+  if (count < 1000) return count.toString();
+  if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
+  return `${Math.round(count / 1000)}k`;
+}
+
+const MAX_THINKING_LINES = 100;
+
+function truncateThinkingLines(lines: OutputLine[]): OutputLine[] {
+  const thinkingLines = lines.filter((l) => l.role === "thinking");
+  if (thinkingLines.length <= MAX_THINKING_LINES) {
+    return lines;
+  }
+
+  // Truncate thinking lines to MAX_THINKING_LINES
+  const result: OutputLine[] = [];
+  let thinkingCount = 0;
+  let inThinkingBlock = false;
+
+  for (const line of lines) {
+    if (line.role === "thinking") {
+      if (!inThinkingBlock) {
+        inThinkingBlock = true;
+        thinkingCount = 0;
+      }
+      thinkingCount++;
+      if (thinkingCount <= MAX_THINKING_LINES) {
+        result.push(line);
+      } else if (thinkingCount === MAX_THINKING_LINES + 1) {
+        // Add truncation message
+        result.push({
+          id: line.id,
+          text: `\n... (${thinkingLines.length - MAX_THINKING_LINES} more thinking lines, press Ctrl+O to show all) ...\n`,
+          role: "thinking",
+        });
+      }
+    } else {
+      inThinkingBlock = false;
+      result.push(line);
+    }
+  }
+
+  return result;
+}
+
 const OutputLines = memo(function OutputLines({
   lines,
+  showThinking,
 }: {
   lines: OutputLine[];
+  showThinking: boolean;
 }) {
+  // Filter or truncate thinking lines based on showThinking
+  const displayLines = showThinking
+    ? lines
+    : truncateThinkingLines(lines.filter((l) => l.role !== "thinking"));
+
   return (
     <>
-      {lines.map((line) => (
+      {displayLines.map((line) => (
         <Box key={line.id} flexDirection="column">
           <Text color={roleColor(line.role)}>{line.text}</Text>
         </Box>
@@ -74,6 +135,28 @@ const StreamingLine = memo(function StreamingLine({ text }: { text: string }) {
   );
 });
 
+const StatusBar = memo(function StatusBar({ data }: { data: TokenUsage }) {
+  const contextPercentStr = data.contextPercent != null
+    ? `${data.contextPercent.toFixed(1)}%`
+    : "?";
+
+  let percentColor = "white";
+  if (data.contextPercent != null) {
+    if (data.contextPercent > 90) percentColor = "red";
+    else if (data.contextPercent > 70) percentColor = "yellow";
+  }
+
+  const left = `↑${formatTokens(data.inputTokens)} ↓${formatTokens(data.outputTokens)}  ${contextPercentStr}/${formatTokens(data.contextWindow ?? 200000)}`;
+  const right = `${data.provider} ${data.modelName}`;
+
+  return (
+    <Box flexDirection="row" justifyContent="space-between" marginTop={1}>
+      <Text color={percentColor}>{left}</Text>
+      <Text>{right}</Text>
+    </Box>
+  );
+});
+
 const InputLine = memo(function InputLine({ input }: { input: string }) {
   return (
     <Box marginTop={1}>
@@ -84,16 +167,68 @@ const InputLine = memo(function InputLine({ input }: { input: string }) {
   );
 });
 
-function App({ onInput, onModelSelect, onProviderSelect, onPickerCancel }: AppProps) {
+const SlashCommandPopover = memo(function SlashCommandPopover({
+  commands,
+  activeIndex,
+  onSelect,
+}: {
+  commands: Command[];
+  activeIndex: number;
+  onSelect: (cmd: Command) => void;
+}) {
+  if (commands.length === 0) return null;
+
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor="blue" paddingX={1} marginBottom={1}>
+      {commands.map((cmd, i) => (
+        <Box key={cmd.name}>
+          <Text
+            color={i === activeIndex ? "blue" : "white"}
+            bold={i === activeIndex}
+          >
+            {i === activeIndex ? "> " : "  "}
+            /{cmd.name.padEnd(12)} — {cmd.description}
+          </Text>
+        </Box>
+      ))}
+    </Box>
+  );
+});
+
+function App({
+  onInput,
+  onModelSelect,
+  onProviderSelect,
+  onApiKeySubmit,
+  onPickerCancel,
+  fetchCommands,
+}: AppProps) {
   const [lines, setLines] = useState<OutputLine[]>([]);
   const [input, setInput] = useState("");
   const [processing, setProcessing] = useState(false);
   const [currentStream, setCurrentStream] = useState("");
-  const [mode, setMode] = useState<"chat" | "model-picker" | "provider-picker">("chat");
+  const [showThinking, setShowThinking] = useState(false);
+  const [mode, setMode] = useState<"chat" | "model-picker" | "provider-picker" | "api-key-input">(
+    "chat",
+  );
   const [catalog, setCatalog] = useState<Record<string, ModelEntry[]>>({});
   const [providers, setProviders] = useState<string[]>([]);
   const [activeModel, setActiveModel] = useState("");
   const [activeProvider, setActiveProvider] = useState("");
+  const [pendingProvider, setPendingProvider] = useState<string>("");
+  const [statusBarData, setStatusBarData] = useState<TokenUsage>({
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    contextPercent: null,
+    contextWindow: 200000,
+    modelName: "",
+    provider: "",
+  });
+  const [commandList, setCommandList] = useState<Command[]>([]);
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  const [showSlashPopover, setShowSlashPopover] = useState(false);
   const { exit } = useApp();
 
   useEffect(() => {
@@ -102,6 +237,9 @@ function App({ onInput, onModelSelect, onProviderSelect, onPickerCancel }: AppPr
     };
     streamState.setStreaming = (text) => {
       setCurrentStream(text);
+    };
+    streamState.setStatusBarData = (data) => {
+      setStatusBarData(data);
     };
     modeState.openModelPicker = (cat, am, ap) => {
       setCatalog(cat);
@@ -114,13 +252,50 @@ function App({ onInput, onModelSelect, onProviderSelect, onPickerCancel }: AppPr
       setActiveProvider(ap);
       setMode("provider-picker");
     };
-  }, []);
+    modeState.openApiKeyInput = (provider) => {
+      setPendingProvider(provider);
+      setMode("api-key-input");
+    };
+    // Fetch command list on init
+    fetchCommands?.().then((cmds) => {
+      setCommandList(cmds);
+      streamState.commands = cmds;
+    });
+  }, [fetchCommands]);
 
   useInput((char, key) => {
     if (mode !== "chat") return;
 
+    if (showSlashPopover) {
+      if (key.upArrow) {
+        setSlashActiveIndex((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setSlashActiveIndex((i) => Math.min(commandList.length - 1, i + 1));
+        return;
+      }
+      if (key.return) {
+        const cmd = commandList[slashActiveIndex];
+        if (cmd) {
+          setInput(`/${cmd.name} `);
+          setShowSlashPopover(false);
+        }
+        return;
+      }
+      if (key.escape) {
+        setShowSlashPopover(false);
+        return;
+      }
+    }
+
     if (key.escape) {
       exit();
+      return;
+    }
+
+    if (key.ctrl && char === "o") {
+      setShowThinking((prev) => !prev);
       return;
     }
 
@@ -147,7 +322,14 @@ function App({ onInput, onModelSelect, onProviderSelect, onPickerCancel }: AppPr
     }
 
     if (!key.ctrl && !key.meta && !key.shift) {
-      setInput((prev) => prev + char);
+      const newInput = input + char;
+      if (char === "/" && input === "") {
+        setShowSlashPopover(true);
+        setSlashActiveIndex(0);
+        setInput(newInput);
+      } else {
+        setInput(newInput);
+      }
     }
   });
 
@@ -155,10 +337,28 @@ function App({ onInput, onModelSelect, onProviderSelect, onPickerCancel }: AppPr
     <Box flexDirection="column" minHeight={1}>
       {mode === "chat" && (
         <>
-          <OutputLines lines={lines} />
+          {showThinking && (
+            <Box marginBottom={1}>
+              <Text color="gray" bold>
+                [Thinking: FULL] Press Ctrl+O to hide
+              </Text>
+            </Box>
+          )}
+          <OutputLines lines={lines} showThinking={showThinking} />
           {processing && currentStream && <StreamingLine text={currentStream} />}
           {processing && !currentStream && <Text color="gray">Thinking...</Text>}
+          {showSlashPopover && (
+            <SlashCommandPopover
+              commands={commandList}
+              activeIndex={slashActiveIndex}
+              onSelect={(cmd) => {
+                setInput(`/${cmd.name} `);
+                setShowSlashPopover(false);
+              }}
+            />
+          )}
           <InputLine input={input} />
+          <StatusBar data={statusBarData} />
         </>
       )}
       {mode === "model-picker" && (
@@ -190,6 +390,19 @@ function App({ onInput, onModelSelect, onProviderSelect, onPickerCancel }: AppPr
           }}
         />
       )}
+      {mode === "api-key-input" && (
+        <ApiKeyInput
+          provider={pendingProvider}
+          onSubmit={(apiKey) => {
+            setMode("chat");
+            onApiKeySubmit?.(pendingProvider, apiKey);
+          }}
+          onCancel={() => {
+            setMode("chat");
+            onPickerCancel?.();
+          }}
+        />
+      )}
     </Box>
   );
 }
@@ -209,6 +422,7 @@ function pushLine(
   });
 }
 let streamingBuffer = "";
+let thinkingBuffer = "";
 let coalesceTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingFlush = false;
 
@@ -216,6 +430,15 @@ function flushStreaming() {
   coalesceTimer = null;
   pendingFlush = false;
   streamState.setStreaming(streamingBuffer);
+}
+
+function flushThinking() {
+  coalesceTimer = null;
+  pendingFlush = false;
+  if (thinkingBuffer) {
+    streamState.addLine(thinkingBuffer, "thinking");
+    thinkingBuffer = "";
+  }
 }
 
 export function renderApp(props: AppProps) {
@@ -242,6 +465,13 @@ export function renderApp(props: AppProps) {
         coalesceTimer = setTimeout(flushStreaming, 16);
       }
     },
+    addThinkingChunk: (chunk: string) => {
+      thinkingBuffer += chunk;
+      if (!pendingFlush) {
+        pendingFlush = true;
+        coalesceTimer = setTimeout(flushThinking, 16);
+      }
+    },
     endStream: () => {
       if (coalesceTimer) {
         clearTimeout(coalesceTimer);
@@ -256,8 +486,20 @@ export function renderApp(props: AppProps) {
       streamingBuffer = "";
       streamState.setStreaming("");
     },
+    endThinking: () => {
+      if (coalesceTimer) {
+        clearTimeout(coalesceTimer);
+        coalesceTimer = null;
+        pendingFlush = false;
+      }
+      flushThinking();
+    },
     openModelPicker: modeState.openModelPicker,
     openProviderPicker: modeState.openProviderPicker,
+    openApiKeyInput: modeState.openApiKeyInput,
+    setStatusBarData: (data: TokenUsage) => {
+      streamState.setStatusBarData(data);
+    },
     waitUntilExit: () => instance.waitUntilExit(),
     clear: () => instance.clear(),
     unmount: () => instance.unmount(),

@@ -15,7 +15,7 @@ export interface REPLDependencies {
   commandRegistry: CommandRegistry;
   skillRegistry: SkillRegistry;
   toolRegistry: ToolRegistry;
-  adapter: import("../types.js").ModelAdapter;
+  adapter?: import("../types.js").ModelAdapter | (() => import("../types.js").ModelAdapter) | null;
   loopConfig: AgentLoopConfig;
   permissionMode: { value: PermissionMode };
   setPermissionMode: (mode: PermissionMode) => void;
@@ -25,14 +25,26 @@ export interface REPLDependencies {
   onOutput: (text: string) => void;
   onStreamChunk?: (chunk: string) => void;
   onStreamEnd?: () => void;
+  onThinkingChunk?: (chunk: string) => void;
+  onEndThinking?: () => void;
   confirm?: (message: string) => Promise<boolean>;
   onRequestModeSwitch?: (mode: string) => void;
+  onStatusBarUpdate?: (data: import("../types.js").TokenUsage) => void;
 }
 
 export class REPL {
   private deps: REPLDependencies;
   private messages: Message[] = [];
   private sessionId: string | null = null;
+  // Permission tracking
+  private approvedTools = new Set<string>();
+  private deniedTools: string[] = [];
+  private pendingPermissionTool: string | null = null;
+  // Token usage tracking
+  private cumulativeInputTokens = 0;
+  private cumulativeOutputTokens = 0;
+  private cumulativeCacheRead = 0;
+  private cumulativeCacheWrite = 0;
 
   constructor(deps: REPLDependencies) {
     this.deps = deps;
@@ -55,6 +67,15 @@ export class REPL {
     if (trimmed === "/exit" || trimmed === "/quit") {
       await this.summarizeOnExit();
       return "exit";
+    }
+
+    if (trimmed === "/new") {
+      this.messages = [];
+      this.sessionId = null;
+      this.approvedTools.clear();
+      this.deniedTools = [];
+      this.deps.onOutput("[New Session] Context cleared. Ready for a fresh start.\n");
+      return "[New Session]";
     }
 
     if (trimmed.startsWith("/")) {
@@ -123,32 +144,106 @@ export class REPL {
       this.deps.loopConfig,
     );
 
-    let output = "";
+    let fullOutput = "";
+    let textBuffer = "";
+
+    const flushBuffer = () => {
+      if (textBuffer) {
+        fullOutput += textBuffer;
+        this.deps.onOutput(textBuffer);
+        textBuffer = "";
+      }
+    };
+
     for await (const event of loop.run(this.messages)) {
       if (event.type === "text-delta" && event.text) {
-        output += event.text;
-        this.deps.onStreamChunk?.(event.text);
-      }
-      if (event.type === "tool-call") {
-        const toolLine = `\n[Tool: ${event.toolName}]`;
-        output += toolLine;
-        this.deps.onStreamChunk?.(toolLine);
-      }
-      if (event.type === "tool-result" && event.toolResult) {
-        const resultLine = `\n[Result: ${event.toolResult.content.slice(0, 100)}]`;
-        output += resultLine;
-        this.deps.onStreamChunk?.(resultLine);
+        textBuffer += event.text;
+        // Output when buffer is large enough or ends with whitespace
+        if (textBuffer.length > 100 || /\s/.test(textBuffer.slice(-1))) {
+          flushBuffer();
+        }
+      } else if (event.type === "reasoning-delta" && event.text) {
+        this.deps.onThinkingChunk?.(event.text);
+      } else if (event.type === "tool-call") {
+        flushBuffer();
+        this.deps.onEndThinking?.();
+        this.deps.onOutput(`[Calling: ${event.toolName}]\n`);
+      } else if (event.type === "tool-result" && event.toolResult) {
+        this.deps.onOutput(`[Result]\n${event.toolResult.content}\n`);
+
+        // Check for permission denial
+        if (event.toolResult.isError && event.toolResult.content.includes("Permission denied")) {
+          const toolName = this.extractToolNameFromResult(event.toolResult.content);
+          if (
+            toolName &&
+            !this.deniedTools.includes(toolName) &&
+            !this.approvedTools.has(toolName)
+          ) {
+            this.deps.onOutput(`\n[Permission Request] Agent needs to use "${toolName}"\n`);
+            if (this.deps.confirm) {
+              const granted = await this.deps.confirm(
+                `Grant permission for tool "${toolName}"? (yes/no/skip)`,
+              );
+              if (granted) {
+                this.approvedTools.add(toolName);
+                this.deps.onOutput(`[Permission granted for ${toolName}]\n`);
+              } else {
+                this.deniedTools.push(toolName);
+                this.deps.onOutput(
+                  `\n[Paused] Waiting for your input. Type "yes" to grant permission, or continue with other tasks.\n`,
+                );
+                break;
+              }
+            } else {
+              this.deps.onOutput("\n[Paused] Waiting for your input.\n");
+              break;
+            }
+          }
+        }
+      } else if (event.type === "finish") {
+        flushBuffer();
+        this.deps.onOutput(`\n[Finished: ${event.finishReason}]\n`);
+      } else if (event.type === "messages" && event.messages) {
+        this.messages = event.messages;
       }
     }
-    this.deps.onStreamEnd?.();
 
-    if (output) {
-      this.messages.push({ role: "assistant", content: output });
-      this.deps.sessionStore.appendMessage(this.sessionId, "assistant", output, 0);
+    // Flush any remaining text in buffer
+    flushBuffer();
+
+    // Track token usage
+    const currentAdapter = this.deps.providerRegistry.getActiveAdapter();
+    const usage = (currentAdapter as any).getUsage?.() ?? (currentAdapter as any).usage;
+    if (usage) {
+      this.cumulativeInputTokens += usage.inputTokens ?? usage.input ?? 0;
+      this.cumulativeOutputTokens += usage.outputTokens ?? usage.output ?? 0;
+      this.cumulativeCacheRead += usage.cacheReadTokens ?? usage.cacheRead ?? 0;
+      this.cumulativeCacheWrite += usage.cacheWriteTokens ?? usage.cacheWrite ?? 0;
     }
 
-    this.deps.onOutput(output);
-    return output;
+    // Update status bar
+    const statusData = this.getStatusBarData();
+    const model = (currentAdapter as any).model;
+    const prov = (currentAdapter as any).provider;
+    statusData.modelName = model?.id ?? "unknown";
+    statusData.provider = prov ?? "unknown";
+    statusData.contextWindow = model?.contextWindow ?? 200000;
+    if (statusData.contextWindow && statusData.contextWindow > 0) {
+      const totalTokens = statusData.inputTokens + statusData.outputTokens;
+      statusData.contextPercent = (totalTokens / statusData.contextWindow) * 100;
+    }
+    this.deps.onStatusBarUpdate?.(statusData);
+
+    if (fullOutput) {
+      this.deps.sessionStore.appendMessage(this.sessionId, "assistant", fullOutput, 0);
+    }
+
+    return fullOutput;
+  }
+
+  private extractToolNameFromResult(content: string): string | null {
+    const match = content.match(/Permission denied for tool: (\w+)/);
+    return match ? match[1] : null;
   }
 
   private buildCommandContext(): CommandContext {
@@ -163,6 +258,23 @@ export class REPL {
       confirm: this.deps.confirm,
       requestModeSwitch: this.deps.onRequestModeSwitch,
     };
+  }
+
+  getStatusBarData(): import("../types.js").TokenUsage {
+    return {
+      inputTokens: this.cumulativeInputTokens,
+      outputTokens: this.cumulativeOutputTokens,
+      cacheReadTokens: this.cumulativeCacheRead,
+      cacheWriteTokens: this.cumulativeCacheWrite,
+      contextPercent: null,
+      contextWindow: 0,
+      modelName: "",
+      provider: "",
+    };
+  }
+
+  async fetchCommands(): Promise<import("./commands.js").Command[]> {
+    return this.deps.commandRegistry.list();
   }
 
   private async summarizeOnExit(): Promise<void> {
