@@ -7,7 +7,7 @@ Personal AI agent with persistent memory, multi-model support, and reusable skil
 - **Hybrid Memory** — MEMORY.md index + mem0 semantic search with local Ollama embeddings
 - **Multi-Provider** — Anthropic, OpenAI, DeepSeek, Ollama, Zhipu, Kimi, MiniMax via unified adapter interface
 - **Skill System** — Markdown-based SKILL.md files with frontmatter, supports domain/workflow/meta skill types
-- **Ink TUI** — Streaming terminal UI with per-token rendering and React component isolation
+- **Terminal UI** — pi-based differential rendering engine with Kitty keyboard protocol support, streaming output, and token usage status bar
 - **MCP Server** — Can run as an MCP server (stdio or SSE) for other agents to connect
 - **20+ Built-in Tools** — File ops, search, git, web, LSP, subagent, academic search, and more
 - **Permission Model** — Normal (ask before destructive), Auto (auto-approve read-only), YOLO (auto-approve all)
@@ -187,7 +187,8 @@ hiwi-agent/
 │   ├── skills/         # SKILL.md loader, executor, composer, importer
 │   ├── tools/          # 20+ built-in tools
 │   ├── mcp/            # MCP server (stdio + SSE)
-│   └── cli/            # Ink TUI, REPL, commands
+│   ├── tui/            # Pi TUI engine (differential rendering, keyboard protocol)
+│   └── cli/            # Terminal UI, REPL, commands
 ├── skills/             # Built-in skills (paper-search, code-review)
 ├── config/             # Default configuration
 └── tests/              # 57 test files (unit + integration)

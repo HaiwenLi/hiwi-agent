@@ -13,7 +13,7 @@ import { SkillExecutor } from "../skills/executor.js";
 import { SkillLoader } from "../skills/loader.js";
 import { SkillRegistry } from "../skills/registry.js";
 import type { PermissionMode } from "../types.js";
-import { renderApp } from "./app.js";
+import { createApp } from "./app.js";
 import { CommandRegistry } from "./commands.js";
 import { runPipeMode } from "./pipe.js";
 import { REPL } from "./repl.js";
@@ -147,9 +147,16 @@ export async function main(options: CLIOptions = {}): Promise<void> {
 
   const permissionMode: { value: PermissionMode } = { value: "normal" };
 
-  // Create REPL first so we can pass its methods to app props
-  // Note: adapter is nullable but REPL accesses it via providerRegistry.getActiveAdapter()
-  const repl = new REPL({
+  let repl: REPL;
+
+  const app = createApp({
+    onInput: async (text) => {
+      const result = await repl.processInput(text);
+      if (result === "exit") process.exit(0);
+    },
+  });
+
+  repl = new REPL({
     commandRegistry,
     skillRegistry,
     toolRegistry,
@@ -167,77 +174,9 @@ export async function main(options: CLIOptions = {}): Promise<void> {
     onStreamEnd: () => app.endStream(),
     onThinkingChunk: (chunk) => app.addThinkingChunk(chunk),
     onEndThinking: () => app.endThinking(),
-    onRequestModeSwitch: (mode) => {
-      if (mode === "model-picker") {
-        const catalog = providerRegistry.getModelCatalog();
-        app.openModelPicker(
-          catalog,
-          providerRegistry.getActiveModel(),
-          providerRegistry.getActiveProvider(),
-        );
-      } else if (mode === "provider-picker") {
-        const providers = Object.keys(providerRegistry.getModelCatalog());
-        app.openProviderPicker(providers, providerRegistry.getActiveProvider());
-      }
-    },
     onStatusBarUpdate: (data) => {
       app.setStatusBarData(data);
     },
-  });
-
-  const app = renderApp({
-    onInput: async (text) => {
-      const result = await repl.processInput(text);
-      if (result === "exit") app.unmount();
-    },
-    onModelSelect: async (modelId) => {
-      try {
-        providerRegistry.setModelWithProvider(modelId);
-        const provider = providerRegistry.getActiveProvider();
-        const adapter = providerRegistry.createAdapter(provider);
-        providerRegistry.registerAdapter(provider, adapter);
-        await saveModelSelection(projectDir, provider, modelId);
-        app.addOutput(`Model: ${modelId} (${provider})`);
-      } catch (e: unknown) {
-        app.addOutput(`Error: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    },
-    onProviderSelect: async (provider) => {
-      try {
-        providerRegistry.setProvider(provider);
-        const adapter = providerRegistry.createAdapter(provider);
-        providerRegistry.registerAdapter(provider, adapter);
-        await saveModelSelection(projectDir, provider, providerRegistry.getActiveModel());
-        app.addOutput(`Provider: ${provider}`);
-      } catch (e: unknown) {
-        const errorMsg = e instanceof Error ? e.message : String(e);
-        if (errorMsg.includes("API key") || errorMsg.includes("No API key")) {
-          app.addOutput(`Provider ${provider} requires API key`);
-          app.openApiKeyInput(provider);
-        } else {
-          app.addOutput(`Error: ${errorMsg}`);
-        }
-      }
-    },
-    onApiKeySubmit: async (provider, apiKey) => {
-      try {
-        await saveProviderConfig(projectDir, provider, { apiKey });
-        // Update the in-memory config so createAdapter can use it
-        providerRegistry.updateProviderConfig(provider, { apiKey });
-        providerRegistry.setProvider(provider);
-        const adapter = providerRegistry.createAdapter(provider);
-        providerRegistry.registerAdapter(provider, adapter);
-        await saveModelSelection(projectDir, provider, providerRegistry.getActiveModel());
-        app.addOutput(`API key saved for ${provider}`);
-        app.addOutput(`Provider: ${provider}`);
-      } catch (e: unknown) {
-        app.addOutput(`Error: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    },
-    onPickerCancel: () => {
-      app.addOutput("Cancelled.");
-    },
-    fetchCommands: () => repl.fetchCommands(),
   });
 
   await app.waitUntilExit();

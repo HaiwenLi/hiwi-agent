@@ -28,7 +28,6 @@ export interface REPLDependencies {
   onThinkingChunk?: (chunk: string) => void;
   onEndThinking?: () => void;
   confirm?: (message: string) => Promise<boolean>;
-  onRequestModeSwitch?: (mode: string) => void;
   onStatusBarUpdate?: (data: import("../types.js").TokenUsage) => void;
 }
 
@@ -274,7 +273,6 @@ export class REPL {
       setPermissionMode: this.deps.setPermissionMode,
       output: this.deps.onOutput,
       confirm: this.deps.confirm,
-      requestModeSwitch: this.deps.onRequestModeSwitch,
     };
   }
 

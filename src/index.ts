@@ -77,7 +77,7 @@ export {
 // CLI
 export { CommandRegistry, type Command, type CommandContext } from "./cli/commands.js";
 export { REPL, type REPLDependencies } from "./cli/repl.js";
-export { renderApp, type AppProps } from "./cli/app.js";
+export { createApp, type AppHandle } from "./cli/app.js";
 export { main } from "./cli/index.js";
 
 // MCP

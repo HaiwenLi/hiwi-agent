@@ -14,7 +14,6 @@ export interface CommandContext {
   setPermissionMode: (mode: PermissionMode) => void;
   output: (text: string) => void;
   confirm?: (message: string) => Promise<boolean>;
-  requestModeSwitch?: (mode: string) => void;
 }
 
 export interface Command {
@@ -62,27 +61,27 @@ export class CommandRegistry {
   registerBuiltinCommands(): void {
     this.register({
       name: "model",
-      description: "Set or pick active model",
+      description: "Set active model (usage: /model <id>)",
       handler: async (args, ctx) => {
-        if (args) {
-          ctx.providerRegistry.setModel(args);
-          return `Model set to: ${args}`;
+        if (!args) {
+          const models = ctx.providerRegistry.listModels();
+          if (models.length === 0) return "No models registered. Use: /model <id>";
+          return models.map((m) => `  ${m.id} (${m.provider})`).join("\n");
         }
-        ctx.requestModeSwitch?.("model-picker");
-        return "";
+        ctx.providerRegistry.setModel(args);
+        return `Model set to: ${args}`;
       },
     });
 
     this.register({
       name: "provider",
-      description: "Set or pick active provider",
+      description: "Set active provider (usage: /provider <name>)",
       handler: async (args, ctx) => {
-        if (args) {
-          ctx.providerRegistry.setProvider(args);
-          return `Provider set to: ${args}`;
+        if (!args) {
+          return "Usage: /provider <name>";
         }
-        ctx.requestModeSwitch?.("provider-picker");
-        return "";
+        ctx.providerRegistry.setProvider(args);
+        return `Provider set to: ${args}`;
       },
     });
 
