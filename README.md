@@ -116,9 +116,11 @@ API keys use `env:VAR_NAME` syntax and resolve from environment variables at run
 
 ```bash
 hiwi-agent              # Interactive TUI REPL
+hiwi-agent --yolo       # YOLO mode (auto-approve all tools)
+hiwi-agent --pipe       # Pipe mode (no TUI, stdin/stdout I/O)
 hiwi-agent --mcp        # MCP server mode (stdio)
 hiwi-agent --mcp --port 3000  # MCP server mode (SSE)
-hiwi-agent --debug      # Debug logging
+hiwi-agent --debug      # Debug logging (raw API chunks)
 ```
 
 ### REPL Commands
@@ -164,8 +166,17 @@ The TUI supports real-time streaming with visual separation of thinking and mode
 - **Streaming markdown** — Model output is rendered incrementally via `onStreamChunk` with full markdown parsing
 - **Thinking display** — Reasoning content shown in italic dim style, collapsible with `Ctrl+O`
 - **Animated loader** — Braille spinner during thinking phases, built on pi's `Loader` component pattern
-- **Thinking effort** — Configurable via `/effort` command (low/medium/high/max), shown in status bar
-- **Adapter support** — All adapters emit `reasoning-delta` events: Anthropic (`thinking_delta`), OpenAI-compat (`reasoning_content`), Zhipu, MiniMax, Ollama
+- **Thinking effort** — Configurable via `/effort` command (low/medium/high/max), shown in status bar as `[effort]`
+- **Token tracking** — Input/output token counts with context window percentage in the status bar. Falls back to content-length estimation when the API doesn't return usage in streaming mode
+- **Adapter support** — All adapters emit `reasoning-delta` events:
+
+| Adapter | Reasoning Mechanism |
+|---------|-------------------|
+| Anthropic | `thinking_delta` SDK event |
+| OpenAI-compat (DeepSeek, Kimi, GPT) | `reasoning_content` in delta |
+| Zhipu (GLM) | `reasoning_content` in delta |
+| MiniMax | `reasoning_content` in delta + `<think>` XML tag parsing in content |
+| Ollama | `reasoning_content` in message/delta |
 
 ## Memory System
 
