@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type {
+  TokenUsage,
   ChatOptions,
   ChatResponse,
   Message,
@@ -23,6 +24,7 @@ export class AnthropicAdapter implements ModelAdapter {
   readonly provider = "anthropic";
   readonly capabilities: ModelCapabilities;
   private client: Anthropic;
+	private lastUsage: TokenUsage | undefined;
 
   constructor(options: { apiKey: string; model?: string }) {
     this.id = options.model ?? DEFAULT_MODEL;
@@ -73,6 +75,8 @@ export class AnthropicAdapter implements ModelAdapter {
     for await (const event of stream) {
       if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
         yield { type: "text-delta", text: event.delta.text };
+      } else if (event.type === "content_block_delta" && event.delta.type === "thinking_delta") {
+        yield { type: "reasoning-delta", text: (event.delta as any).thinking as string };
       } else if (event.type === "content_block_start" && event.content_block.type === "tool_use") {
         yield {
           type: "tool-call",
@@ -86,17 +90,22 @@ export class AnthropicAdapter implements ModelAdapter {
     }
 
     const finalMessage = await stream.finalMessage();
+    this.lastUsage = {
+      inputTokens: finalMessage.usage.input_tokens,
+      outputTokens: finalMessage.usage.output_tokens,
+    };
     yield {
       type: "finish",
       finishReason: finalMessage.stop_reason === "tool_use" ? "tool-calls" : "stop",
-      usage: {
-        inputTokens: finalMessage.usage.input_tokens,
-        outputTokens: finalMessage.usage.output_tokens,
-      },
+      usage: this.lastUsage,
     };
   }
 
-  private convertMessages(messages: Message[]): {
+  getUsage(): TokenUsage | undefined {
+	    return this.lastUsage;
+	  }
+
+	  private convertMessages(messages: Message[]): {
     system: string | null;
     convertedMessages: Anthropic.MessageParam[];
   } {

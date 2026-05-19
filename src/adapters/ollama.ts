@@ -1,4 +1,5 @@
 import type {
+  TokenUsage,
   ChatOptions,
   ChatResponse,
   Message,
@@ -29,6 +30,7 @@ export class OllamaAdapter implements ModelAdapter {
   readonly provider = "ollama";
   readonly capabilities: ModelCapabilities;
   private baseUrl: string;
+	private lastUsage: TokenUsage | undefined;
 
   constructor(options: { baseUrl?: string; model?: string }) {
     this.id = options.model ?? "llama3";
@@ -144,6 +146,11 @@ export class OllamaAdapter implements ModelAdapter {
               eval_count?: number;
             };
 
+            // Reasoning content (thinking) — some Ollama-compatible servers include this
+            const reasoningContent = (chunk.message as any)?.reasoning_content ?? (chunk as any).reasoning_content;
+            if (reasoningContent) {
+              yield { type: "reasoning-delta", text: reasoningContent as string };
+            }
             if (chunk.message?.content) {
               yield { type: "text-delta", text: chunk.message.content };
             }
@@ -178,13 +185,14 @@ export class OllamaAdapter implements ModelAdapter {
                 };
               }
 
+              this.lastUsage = {
+                inputTokens: chunk.prompt_eval_count ?? 0,
+                outputTokens: chunk.eval_count ?? 0,
+              };
               yield {
                 type: "finish",
                 finishReason: hasToolCalls ? "tool-calls" : "stop",
-                usage: {
-                  inputTokens: chunk.prompt_eval_count ?? 0,
-                  outputTokens: chunk.eval_count ?? 0,
-                },
+                usage: this.lastUsage,
               };
             }
           } catch {
@@ -197,7 +205,11 @@ export class OllamaAdapter implements ModelAdapter {
     }
   }
 
-  private convertMessages(messages: Message[]): Array<Record<string, unknown>> {
+  getUsage(): TokenUsage | undefined {
+	    return this.lastUsage;
+	  }
+
+	  private convertMessages(messages: Message[]): Array<Record<string, unknown>> {
     return messages.map((msg) => {
       switch (msg.role) {
         case "system":

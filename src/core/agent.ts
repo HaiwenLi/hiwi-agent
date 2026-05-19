@@ -148,6 +148,8 @@ export class AgentLoop {
           if (chunk.type === "text-delta") {
             content += chunk.text;
             yield { type: "text-delta", text: chunk.text, iteration };
+          } else if (chunk.type === "reasoning-delta") {
+            yield { type: "reasoning-delta", text: chunk.text, iteration };
           } else if (chunk.type === "tool-call") {
             toolCalls.push(chunk.toolCall);
             yield {

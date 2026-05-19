@@ -30,6 +30,7 @@ export interface TokenUsage {
   contextWindow?: number;
   modelName?: string;
   provider?: string;
+  thinkingEffort?: string;
 }
 
 export interface StatusBarData {
@@ -80,6 +81,7 @@ export interface ModelAdapter {
 
   chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse>;
   stream(messages: Message[], options?: ChatOptions): AsyncIterable<StreamChunk>;
+  getUsage?(): TokenUsage | undefined;
 }
 
 // ─── Tool System Types ────────────────────────────────────────

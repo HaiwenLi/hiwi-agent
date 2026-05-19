@@ -14,6 +14,8 @@ export interface CommandContext {
   setPermissionMode: (mode: PermissionMode) => void;
   output: (text: string) => void;
   confirm?: (message: string) => Promise<boolean>;
+  thinkingEffort?: string;
+  setThinkingEffort?: (effort: string) => void;
 }
 
 export interface Command {
@@ -200,6 +202,31 @@ export class CommandRegistry {
         const session = ctx.sessionStore.createSession(process.cwd());
         return `New session started: ${session.id}`;
       },
+    });
+
+    this.register({
+      name: "effort",
+      description: "Set thinking effort (low/medium/high/max)",
+      handler: async (args, ctx) => {
+        const validEfforts = ["low", "medium", "high", "max"];
+        if (!args || !validEfforts.includes(args)) {
+          return `Thinking effort: ${ctx.thinkingEffort ?? "high"}. Usage: /effort <low|medium|high|max>`;
+        }
+        ctx.setThinkingEffort?.(args);
+        return `Thinking effort set to: ${args}`;
+      },
+    });
+
+    this.register({
+      name: "exit",
+      description: "Exit the REPL",
+      handler: async () => "exit",
+    });
+
+    this.register({
+      name: "quit",
+      description: "Exit the REPL",
+      handler: async () => "exit",
     });
   }
 }

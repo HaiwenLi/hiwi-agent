@@ -44,6 +44,7 @@ export class REPL {
   private cumulativeOutputTokens = 0;
   private cumulativeCacheRead = 0;
   private cumulativeCacheWrite = 0;
+  private thinkingEffort: string = "high";
 
   constructor(deps: REPLDependencies) {
     this.deps = deps;
@@ -144,28 +145,38 @@ export class REPL {
     );
 
     let fullOutput = "";
-    let textBuffer = "";
+    let isThinking = false;
+    let isStreaming = false;
 
-    const flushBuffer = () => {
-      if (textBuffer) {
-        fullOutput += textBuffer;
-        this.deps.onOutput(textBuffer);
-        textBuffer = "";
+    const endStreams = () => {
+      if (isStreaming) {
+        this.deps.onStreamEnd?.();
+        isStreaming = false;
+      }
+      if (isThinking) {
+        this.deps.onEndThinking?.();
+        isThinking = false;
       }
     };
 
     for await (const event of loop.run(this.messages)) {
       if (event.type === "text-delta" && event.text) {
-        textBuffer += event.text;
-        // Output when buffer is large enough or ends with whitespace
-        if (textBuffer.length > 100 || /\s/.test(textBuffer.slice(-1))) {
-          flushBuffer();
+        if (isThinking) {
+          this.deps.onEndThinking?.();
+          isThinking = false;
         }
+        if (!isStreaming) {
+          isStreaming = true;
+        }
+        fullOutput += event.text;
+        this.deps.onStreamChunk?.(event.text);
       } else if (event.type === "reasoning-delta" && event.text) {
+        if (!isThinking) {
+          isThinking = true;
+        }
         this.deps.onThinkingChunk?.(event.text);
       } else if (event.type === "tool-call") {
-        flushBuffer();
-        this.deps.onEndThinking?.();
+        endStreams();
         this.deps.onOutput(`[Calling: ${event.toolName}]\n`);
       } else if (event.type === "tool-result" && event.toolResult) {
         this.deps.onOutput(`[Result]\n${event.toolResult.content}\n`);
@@ -200,51 +211,37 @@ export class REPL {
           }
         }
       } else if (event.type === "finish") {
-        flushBuffer();
+        endStreams();
+        if (event.usage) {
+          this.cumulativeInputTokens += event.usage.inputTokens ?? 0;
+          this.cumulativeOutputTokens += event.usage.outputTokens ?? 0;
+        }
         this.deps.onOutput(`\n[Finished: ${event.finishReason}]\n`);
       } else if (event.type === "messages" && event.messages) {
         this.messages = event.messages;
       }
     }
 
-    // Flush any remaining text in buffer
-    flushBuffer();
+    // Flush any remaining streams
+    endStreams();
 
-    // Track token usage
+    // Update status bar with adapter info
     const currentAdapter = this.deps.providerRegistry.getActiveAdapter();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- adapters may have hidden model/usage properties
-    const extAdapter = currentAdapter as typeof currentAdapter & {
-      getUsage?: () => {
-        inputTokens?: number;
-        outputTokens?: number;
-        input?: number;
-        output?: number;
-      };
-      model?: { id: string; contextWindow?: number };
-      provider?: string;
-    };
-    const usage = extAdapter.getUsage?.() ?? (extAdapter as { usage?: unknown }).usage;
-    if (usage) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const u = usage as {
-        inputTokens?: number;
-        outputTokens?: number;
-        input?: number;
-        output?: number;
-        cacheReadTokens?: number;
-        cacheWriteTokens?: number;
-      };
-      this.cumulativeInputTokens += u.inputTokens ?? u.input ?? 0;
-      this.cumulativeOutputTokens += u.outputTokens ?? u.output ?? 0;
-      this.cumulativeCacheRead += u.cacheReadTokens ?? 0;
-      this.cumulativeCacheWrite += u.cacheWriteTokens ?? 0;
+    const statusData = this.getStatusBarData();
+
+    // Fallback: estimate tokens if none were counted (some APIs don't return usage in streaming)
+    if (this.cumulativeInputTokens === 0 && this.messages.length > 0) {
+      this.cumulativeInputTokens = Math.max(1, Math.ceil(JSON.stringify(this.messages).length / 4));
+      statusData.inputTokens = this.cumulativeInputTokens;
+    }
+    if (this.cumulativeOutputTokens === 0 && fullOutput.length > 0) {
+      this.cumulativeOutputTokens = Math.max(1, Math.ceil(fullOutput.length / 4));
+      statusData.outputTokens = this.cumulativeOutputTokens;
     }
 
-    // Update status bar
-    const statusData = this.getStatusBarData();
-    statusData.modelName = extAdapter.model?.id ?? "unknown";
-    statusData.provider = extAdapter.provider ?? "unknown";
-    statusData.contextWindow = extAdapter.model?.contextWindow ?? 200000;
+    statusData.modelName = currentAdapter.id ?? "unknown";
+    statusData.provider = currentAdapter.provider ?? "unknown";
+    statusData.contextWindow = currentAdapter.capabilities?.contextWindow ?? 200000;
     if (statusData.contextWindow && statusData.contextWindow > 0) {
       const totalTokens = statusData.inputTokens + statusData.outputTokens;
       statusData.contextPercent = (totalTokens / statusData.contextWindow) * 100;
@@ -273,6 +270,8 @@ export class REPL {
       setPermissionMode: this.deps.setPermissionMode,
       output: this.deps.onOutput,
       confirm: this.deps.confirm,
+      thinkingEffort: this.thinkingEffort,
+      setThinkingEffort: (effort: string) => this.setThinkingEffort(effort),
     };
   }
 
@@ -286,7 +285,13 @@ export class REPL {
       contextWindow: 0,
       modelName: "",
       provider: "",
+      thinkingEffort: this.thinkingEffort,
     };
+  }
+
+  setThinkingEffort(effort: string): void {
+    this.thinkingEffort = effort;
+    this.deps.onStatusBarUpdate?.(this.getStatusBarData());
   }
 
   async fetchCommands(): Promise<import("./commands.js").Command[]> {

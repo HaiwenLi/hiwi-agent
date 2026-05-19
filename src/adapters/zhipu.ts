@@ -1,4 +1,5 @@
 import type {
+  TokenUsage,
   ChatOptions,
   ChatResponse,
   Message,
@@ -35,6 +36,7 @@ export class ZhipuAdapter implements ModelAdapter {
   readonly capabilities: ModelCapabilities;
   private apiKey: string;
   private baseUrl: string;
+  private lastUsage: TokenUsage | undefined;
 
   constructor(config: { apiKey: string; baseUrl?: string; model?: string }) {
     this.apiKey = config.apiKey;
@@ -119,6 +121,7 @@ export class ZhipuAdapter implements ModelAdapter {
       max_tokens: options?.maxTokens ?? this.capabilities.maxTokens,
       temperature: options?.temperature ?? 0.7,
       stream: true,
+      stream_options: { include_usage: true },
     };
     if (options?.tools?.length) {
       body.tools = this.convertTools(options.tools);
@@ -184,6 +187,11 @@ export class ZhipuAdapter implements ModelAdapter {
 
           const delta = choice.delta;
 
+          // Reasoning content (thinking)
+          if ((delta as any).reasoning_content) {
+            yield { type: "reasoning-delta", text: (delta as any).reasoning_content };
+          }
+
           // Text content
           if (delta?.content) {
             yield { type: "text-delta", text: delta.content };
@@ -234,7 +242,8 @@ export class ZhipuAdapter implements ModelAdapter {
       };
     }
 
-    yield {
+    		this.lastUsage = { inputTokens, outputTokens };
+		yield {
       type: "finish",
       finishReason: finishReason === "tool_calls" ? "tool-calls" : "stop",
       usage: { inputTokens, outputTokens },
@@ -275,7 +284,11 @@ export class ZhipuAdapter implements ModelAdapter {
     });
   }
 
-  private convertTools(tools: ToolDefinition[]): unknown[] {
+  getUsage(): TokenUsage | undefined {
+	    return this.lastUsage;
+	  }
+
+	  private convertTools(tools: ToolDefinition[]): unknown[] {
     return tools.map((t) => ({
       type: "function",
       function: {

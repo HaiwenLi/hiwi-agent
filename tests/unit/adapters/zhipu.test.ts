@@ -26,7 +26,7 @@ describe("ZhipuAdapter", () => {
   it("reports correct capabilities for glm-4-flash", () => {
     expect(adapter.capabilities.tools).toBe(true);
     expect(adapter.capabilities.vision).toBe(false);
-    expect(adapter.capabilities.contextWindow).toBe(128_000);
+    expect(adapter.capabilities.contextWindow).toBe(200_000);
   });
 
   it("sends chat request with correct headers", async () => {
@@ -79,14 +79,94 @@ describe("ZhipuAdapter", () => {
     await expect(adapter.chat(messages)).rejects.toThrow(/Invalid or expired/);
   });
 
-  it("defaults to glm-4-flash model", () => {
+  it("defaults to glm-5 model", () => {
     const defaultAdapter = new ZhipuAdapter({ apiKey: "key" });
-    expect(defaultAdapter.id).toBe("glm-4-flash");
+    expect(defaultAdapter.id).toBe("glm-5");
   });
 
   it("ZHIPU_MODELS has expected entries", () => {
-    expect(ZHIPU_MODELS["glm-4-plus"].contextWindow).toBe(128_000);
+    expect(ZHIPU_MODELS["glm-4-plus"].contextWindow).toBe(200_000);
     expect(ZHIPU_MODELS["glm-4v"].vision).toBe(true);
     expect(ZHIPU_MODELS["glm-4v"].tools).toBe(false);
+    expect(ZHIPU_MODELS["glm-5"].contextWindow).toBe(200_000);
+  });
+
+  describe("streaming with reasoning", () => {
+    it("yields reasoning-delta chunks when reasoning_content is present", async () => {
+      const chunks = [
+        { delta: { reasoning_content: "Let me think" }, finish_reason: null },
+        { delta: { reasoning_content: " step by step" }, finish_reason: null },
+        { delta: { content: "The answer is 42" }, finish_reason: null },
+        { delta: {}, finish_reason: "stop" },
+      ];
+
+      const sseBody = chunks
+        .map((c) => `data: ${JSON.stringify({ choices: [c] })}`)
+        .join("\n\n") + "\n\ndata: [DONE]\n";
+
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(sseBody));
+          controller.close();
+        },
+      });
+
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: stream,
+        headers: new Headers({ "content-type": "text/event-stream" }),
+      } as any);
+
+      const events = [];
+      for await (const chunk of adapter.stream([{ role: "user", content: "think" }])) {
+        events.push(chunk);
+      }
+
+      const reasoning = events.filter((e) => e.type === "reasoning-delta");
+      const text = events.filter((e) => e.type === "text-delta");
+
+      expect(reasoning).toHaveLength(2);
+      expect(reasoning[0].text).toBe("Let me think");
+      expect(reasoning[1].text).toBe(" step by step");
+      expect(text).toHaveLength(1);
+      expect(text[0].text).toBe("The answer is 42");
+    });
+
+    it("works without reasoning_content (backward compatible)", async () => {
+      const chunks = [
+        { delta: { content: "Hello" }, finish_reason: null },
+        { delta: {}, finish_reason: "stop" },
+      ];
+
+      const sseBody = chunks
+        .map((c) => `data: ${JSON.stringify({ choices: [c] })}`)
+        .join("\n\n") + "\n\ndata: [DONE]\n";
+
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(sseBody));
+          controller.close();
+        },
+      });
+
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: stream,
+        headers: new Headers({ "content-type": "text/event-stream" }),
+      } as any);
+
+      const events = [];
+      for await (const chunk of adapter.stream([{ role: "user", content: "Hi" }])) {
+        events.push(chunk);
+      }
+
+      const reasoning = events.filter((e) => e.type === "reasoning-delta");
+      const text = events.filter((e) => e.type === "text-delta");
+      expect(reasoning).toHaveLength(0);
+      expect(text).toHaveLength(1);
+      expect(text[0].text).toBe("Hello");
+    });
   });
 });

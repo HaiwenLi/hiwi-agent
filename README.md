@@ -5,9 +5,9 @@ Personal AI agent with persistent memory, multi-model support, and reusable skil
 ## Features
 
 - **Hybrid Memory** — MEMORY.md index + mem0 semantic search with local Ollama embeddings
-- **Multi-Provider** — Anthropic, OpenAI, DeepSeek, Ollama, Zhipu, Kimi, MiniMax via unified adapter interface
+- **Multi-Provider** — Anthropic, OpenAI, DeepSeek, Ollama, Zhipu, Kimi, MiniMax via unified adapter interface with reasoning/thinking support across all providers
 - **Skill System** — Markdown-based SKILL.md files with frontmatter, supports domain/workflow/meta skill types
-- **Terminal UI** — pi-based differential rendering engine with Kitty keyboard protocol support, streaming output, and token usage status bar
+- **Terminal UI** — pi-based differential rendering engine with animated thinking loader, streaming markdown output, reasoning display (collapsible), slash-command popup, and token usage status bar
 - **MCP Server** — Can run as an MCP server (stdio or SSE) for other agents to connect
 - **20+ Built-in Tools** — File ops, search, git, web, LSP, subagent, academic search, and more
 - **Permission Model** — Normal (ask before destructive), Auto (auto-approve read-only), YOLO (auto-approve all)
@@ -128,14 +128,19 @@ hiwi-agent --debug      # Debug logging
 | `/model <id>` | Set or show active model |
 | `/provider <name>` | Set or show active provider |
 | `/models` | List available models |
+| `/effort <low\|medium\|high\|max>` | Set thinking effort for current model |
 | `/remember <name>: <content>` | Save a memory |
 | `/recall <query>` | Semantic search across memories |
 | `/forget <name>` | Delete a memory |
 | `/skills` | List loaded skills |
 | `/sessions` | List sessions |
 | `/yolo` | Toggle YOLO permission mode |
+| `/test <provider?>` | Test connection to provider |
+| `/new` | Start a new session |
 | `/help` | Show commands |
-| `/exit` | Exit REPL |
+| `/exit` or `/quit` | Exit REPL |
+
+The slash-command popup (activated by typing `/`) provides autocomplete and discovery for all registered commands.
 
 ### MCP Server
 
@@ -151,6 +156,16 @@ Add to Claude Code's `.claude/settings.json`:
   }
 }
 ```
+
+## Streaming & Thinking
+
+The TUI supports real-time streaming with visual separation of thinking and model output:
+
+- **Streaming markdown** — Model output is rendered incrementally via `onStreamChunk` with full markdown parsing
+- **Thinking display** — Reasoning content shown in italic dim style, collapsible with `Ctrl+O`
+- **Animated loader** — Braille spinner during thinking phases, built on pi's `Loader` component pattern
+- **Thinking effort** — Configurable via `/effort` command (low/medium/high/max), shown in status bar
+- **Adapter support** — All adapters emit `reasoning-delta` events: Anthropic (`thinking_delta`), OpenAI-compat (`reasoning_content`), Zhipu, MiniMax, Ollama
 
 ## Memory System
 
@@ -182,16 +197,23 @@ Hybrid architecture combining a hand-editable Markdown index with vector-based s
 hiwi-agent/
 ├── src/
 │   ├── core/           # Agent loop, tool registry, config
-│   ├── adapters/       # Model providers (Anthropic, OpenAI, Ollama, etc.)
+│   ├── adapters/       # Model providers (all with reasoning_content support)
+│   │                   #   Anthropic (thinking_delta), OpenAI-compat, Zhipu,
+│   │                   #   MiniMax, Ollama, Mock
 │   ├── memory/         # MEMORY.md, mem0, compaction, auto-extraction
 │   ├── skills/         # SKILL.md loader, executor, composer, importer
 │   ├── tools/          # 20+ built-in tools
 │   ├── mcp/            # MCP server (stdio + SSE)
-│   ├── tui/            # Pi TUI engine (differential rendering, keyboard protocol)
-│   └── cli/            # Terminal UI, REPL, commands
+│   ├── tui/            # Pi TUI engine — differential rendering
+│   │   ├── components/ # Loader (animated spinner), Text (word-wrapping),
+│   │   │               #   Markdown (full renderer)
+│   │   ├── tui.ts      # TUI core (render loop, overlays, input routing)
+│   │   ├── utils.ts    # ANSI-aware text utilities
+│   │   └── keys.ts     # Keyboard input handling (Kitty protocol)
+│   └── cli/            # Terminal UI (ChatComponent), REPL, commands, pipe mode
 ├── skills/             # Built-in skills (paper-search, code-review)
 ├── config/             # Default configuration
-└── tests/              # 57 test files (unit + integration)
+└── tests/              # 86 test files (unit + integration)
 ```
 
 ## Development

@@ -136,4 +136,47 @@ describe("OpenAICompatAdapter", () => {
     });
     expect(deepseek.capabilities.contextWindow).toBe(128_000);
   });
+
+  describe("streaming with reasoning", () => {
+    it("yields reasoning-delta chunks when reasoning_content is present", async () => {
+      async function* mockStream() {
+        yield { choices: [{ delta: { reasoning_content: "Thinking..." } }] };
+        yield { choices: [{ delta: { content: "Answer" } }] };
+        yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+      }
+
+      mockCreate.mockResolvedValue(mockStream());
+
+      const adapter = new OpenAICompatAdapter({ provider: "deepseek", apiKey: "sk-test", model: "deepseek-r1" });
+      const events = [];
+      for await (const chunk of adapter.stream([{ role: "user", content: "think" }])) {
+        events.push(chunk);
+      }
+
+      const reasoning = events.filter((e) => e.type === "reasoning-delta");
+      const text = events.filter((e) => e.type === "text-delta");
+      expect(reasoning).toHaveLength(1);
+      expect(reasoning[0].text).toBe("Thinking...");
+      expect(text).toHaveLength(1);
+      expect(text[0].text).toBe("Answer");
+    });
+
+    it("works without reasoning_content (backward compatible)", async () => {
+      async function* mockStream() {
+        yield { choices: [{ delta: { content: "Hello" } }] };
+        yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+      }
+
+      mockCreate.mockResolvedValue(mockStream());
+
+      const adapter = new OpenAICompatAdapter({ provider: "openai", apiKey: "sk-test" });
+      const events = [];
+      for await (const chunk of adapter.stream([{ role: "user", content: "Hi" }])) {
+        events.push(chunk);
+      }
+
+      const reasoning = events.filter((e) => e.type === "reasoning-delta");
+      expect(reasoning).toHaveLength(0);
+    });
+  });
 });

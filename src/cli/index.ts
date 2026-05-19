@@ -152,8 +152,12 @@ export async function main(options: CLIOptions = {}): Promise<void> {
   const app = createApp({
     onInput: async (text) => {
       const result = await repl.processInput(text);
-      if (result === "exit") process.exit(0);
+      if (result === "exit") {
+        app.destroy();
+        process.exit(0);
+      }
     },
+    fetchCommands: async () => commandRegistry.list(),
   });
 
   repl = new REPL({
@@ -178,6 +182,14 @@ export async function main(options: CLIOptions = {}): Promise<void> {
       app.setStatusBarData(data);
     },
   });
+
+  // Show initial status bar with provider/model info
+  const adapter = providerRegistry.getActiveAdapter();
+  const initialStatus = repl.getStatusBarData();
+  initialStatus.modelName = adapter?.id ?? "unknown";
+  initialStatus.provider = adapter?.provider ?? "unknown";
+  initialStatus.contextWindow = adapter?.capabilities?.contextWindow ?? 200000;
+  app.setStatusBarData(initialStatus);
 
   await app.waitUntilExit();
   sessionStore.close();

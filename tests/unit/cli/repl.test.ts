@@ -22,9 +22,11 @@ describe("REPL", () => {
   let toolRegistry: ToolRegistry;
   let adapter: MockAdapter;
   let outputs: string[];
+  let streamOutputs: string[];
 
   beforeEach(() => {
     outputs = [];
+    streamOutputs = [];
     commandRegistry = new CommandRegistry();
     commandRegistry.registerBuiltinCommands();
     skillRegistry = new SkillRegistry();
@@ -63,6 +65,7 @@ describe("REPL", () => {
         getMessages: vi.fn(() => []),
       } as any,
       onOutput: (text: string) => outputs.push(text),
+      onStreamChunk: (chunk: string) => streamOutputs.push(chunk),
       confirm: vi.fn(async () => true),
     };
   });
@@ -82,7 +85,8 @@ describe("REPL", () => {
 
     const repl = new REPL(deps);
     await repl.processInput("Hi there");
-    expect(outputs.some((o) => o.includes("Hello"))).toBe(true);
+    const allOutput = [...outputs, ...streamOutputs];
+    expect(allOutput.some((o) => o.includes("Hello"))).toBe(true);
   });
 
   it("routes skill triggers to skill executor", async () => {

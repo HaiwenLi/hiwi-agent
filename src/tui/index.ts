@@ -19,3 +19,5 @@ export {
 	setKittyProtocolActive,
 } from "./keys.js";
 export { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "./utils.js";
+export { Loader, type LoaderOptions } from "./components/loader.js";
+export { Text } from "./components/text.js";

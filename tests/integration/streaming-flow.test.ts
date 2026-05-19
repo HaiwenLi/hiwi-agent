@@ -1,5 +1,5 @@
 import { MockAdapter } from "@/adapters/mock.js";
-import { renderApp } from "@/cli/app.js";
+import { createApp } from "@/cli/app.js";
 import { AgentLoop } from "@/core/agent.js";
 import { ToolRegistry } from "@/core/tools.js";
 import type { AgentLoopConfig } from "@/types.js";
@@ -19,7 +19,7 @@ describe("Streaming integration flow", () => {
     vi.restoreAllMocks();
   });
 
-  it("end-to-end: adapter.stream() → AgentLoop → renderApp coalesced output", async () => {
+  it("end-to-end: adapter.stream() → AgentLoop → createApp streaming output", async () => {
     const adapter = new MockAdapter([
       { content: "The quick brown fox jumps over the lazy dog.", toolCalls: [], finishReason: "stop" },
     ]);
@@ -38,7 +38,7 @@ describe("Streaming integration flow", () => {
     const fullText = textDeltas.map((e) => e.text).join("");
     expect(fullText).toContain("The quick brown fox");
 
-    const app = renderApp({ onInput: async () => {} });
+    const app = createApp({ onInput: async () => {} });
     for (const delta of textDeltas) {
       app.addStreamChunk(delta.text);
     }
@@ -47,6 +47,5 @@ describe("Streaming integration flow", () => {
     await new Promise((r) => setTimeout(r, 30));
 
     app.addOutput("next message", "assistant");
-    app.unmount();
   });
 });
