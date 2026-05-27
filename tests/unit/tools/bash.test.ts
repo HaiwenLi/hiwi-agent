@@ -1,9 +1,38 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createBashTool } from "@/tools/bash.js";
+import { createBashTool, tryRtkRewrite } from "@/tools/bash.js";
 import type { Tool, ToolContext } from "@/types.js";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+describe("tryRtkRewrite", () => {
+  it("rewrites git status to rtk git status", () => {
+    const result = tryRtkRewrite("git status");
+    expect(result).toBe("rtk git status");
+  });
+
+  it("rewrites cargo test to rtk cargo test", () => {
+    const result = tryRtkRewrite("cargo test");
+    expect(result).toBe("rtk cargo test");
+  });
+
+  it("passes through non-matching commands unchanged", () => {
+    const result = tryRtkRewrite("echo hello");
+    expect(result).toBe("echo hello");
+  });
+
+  it("passes through when rtk binary not found", () => {
+    const result = tryRtkRewrite("git status", { rtkPath: "rtk-nonexistent" });
+    expect(result).toBe("git status");
+  });
+
+  it("passes through when RTK_DISABLED env is set", () => {
+    vi.stubEnv("RTK_DISABLED", "1");
+    const result = tryRtkRewrite("git status");
+    expect(result).toBe("git status");
+    vi.unstubAllEnvs();
+  });
+});
 
 describe("bash tool", () => {
   let tempDir: string;
@@ -32,19 +61,23 @@ describe("bash tool", () => {
   });
 
   it("captures stderr on failure", async () => {
-    const result = await tool.execute({ command: "ls /nonexistent-dir-xyz" }, ctx);
+    const result = await tool.execute({ command: "cmd /c dir /b nonexistent-dir-xyz" }, ctx);
     expect(result.isError).toBe(true);
   });
 
   it("respects the working directory", async () => {
+    const isWin = process.platform === "win32";
     await fs.writeFile(path.join(tempDir, "marker.txt"), "found");
-    const result = await tool.execute({ command: "cat marker.txt" }, ctx);
+    const cmd = isWin ? "type marker.txt" : "cat marker.txt";
+    const result = await tool.execute({ command: cmd }, ctx);
     expect(result.isError).toBe(false);
     expect(result.content).toContain("found");
   });
 
   it("supports timeout parameter", async () => {
-    const result = await tool.execute({ command: "sleep 10", timeout: 100 }, ctx);
+    const isWin = process.platform === "win32";
+    const cmd = isWin ? "ping -n 10 localhost" : "sleep 10";
+    const result = await tool.execute({ command: cmd, timeout: 100 }, ctx);
     expect(result.isError).toBe(true);
     expect(result.content).toContain("timed out");
   });
@@ -70,5 +103,10 @@ describe("bash tool", () => {
   it("returns title with command preview", async () => {
     const result = await tool.execute({ command: "echo test" }, ctx);
     expect(result.title).toContain("echo test");
+  });
+
+  it("rewrites git commands through rtk transparently", async () => {
+    const result = await tool.execute({ command: "echo 'rtk works'" }, ctx);
+    expect(result.isError).toBe(false);
   });
 });

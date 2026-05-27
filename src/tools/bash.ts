@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execSync, spawnSync, spawn } from "node:child_process";
 import path from "node:path";
 import type { Tool, ToolContext, ToolResult } from "../types.js";
 import { TruncationService } from "./truncation.js";
@@ -86,6 +86,23 @@ interface CommandResult {
   stderr: string;
 }
 
+export function tryRtkRewrite(
+  command: string,
+  options?: { rtkPath?: string },
+): string {
+  if (process.env.RTK_DISABLED === "1") return command;
+  const rtkPath = options?.rtkPath ?? "rtk";
+  const result = spawnSync(rtkPath, ["rewrite", command], {
+    encoding: "utf-8",
+    timeout: 2000,
+    windowsHide: true,
+  });
+  if (result.error) return command;
+  const stdout = result.stdout?.trim();
+  const rewritten = stdout && stdout !== command ? stdout : "";
+  return rewritten || command;
+}
+
 function runCommand(
   command: string,
   cwd: string,
@@ -93,9 +110,10 @@ function runCommand(
   abort?: AbortSignal,
 ): Promise<CommandResult> {
   return new Promise((resolve) => {
+    const rewritten = tryRtkRewrite(command);
     const isWindows = process.platform === "win32";
     const shell = isWindows ? "cmd" : "/bin/bash";
-    const shellArgs = isWindows ? ["/c", command] : ["-c", command];
+    const shellArgs = isWindows ? ["/c", rewritten] : ["-c", rewritten];
 
     const child = spawn(shell, shellArgs, {
       cwd,
