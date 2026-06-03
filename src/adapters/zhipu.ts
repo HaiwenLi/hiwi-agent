@@ -9,7 +9,7 @@ import type {
   ToolCall,
   ToolDefinition,
 } from "../types.js";
-import { extractText, safeJsonParse } from "./adapter-utils.js";
+import { buildNormalizedUsage, enrichUsage, extractText, safeJsonParse } from "./adapter-utils.js";
 
 export const ZHIPU_MODELS: Record<string, ModelCapabilities> = {
   "glm-5.1": { tools: true, vision: true, maxTokens: 128_000, contextWindow: 200_000 },
@@ -143,28 +143,17 @@ export class ZhipuAdapter implements ModelAdapter {
       input: safeJsonParse(tc.function.arguments),
     }));
 
-    const inputTk = data.usage?.prompt_tokens ?? 0;
-    const outputTk = data.usage?.completion_tokens ?? 0;
-    // GLM returns cached tokens in `usage.prompt_tokens_details.cached_tokens`
-    const cacheHit = data.usage?.prompt_tokens_details?.cached_tokens;
+    const baseUsage = buildNormalizedUsage("zhipu", {
+      prompt_tokens: data.usage?.prompt_tokens,
+      completion_tokens: data.usage?.completion_tokens,
+      prompt_tokens_details: data.usage?.prompt_tokens_details,
+    });
 
     return {
       content: choice?.message?.content ?? "",
       toolCalls,
       finishReason: choice?.finish_reason === "tool_calls" ? "tool-calls" : "stop",
-      usage: {
-        inputTokens: inputTk,
-        outputTokens: outputTk,
-        cacheReadTokens: cacheHit,
-        contextWindow: this.capabilities.contextWindow,
-        contextPercent:
-          this.capabilities.contextWindow > 0
-            ? Math.round((inputTk / this.capabilities.contextWindow) * 100)
-            : null,
-        modelName: data.model ?? this.id,
-        provider: this.provider,
-        thinkingEffort: options?.reasoningEffort,
-      },
+      usage: enrichUsage(baseUsage, this.capabilities.contextWindow, data.model ?? this.id, this.provider, options?.reasoningEffort),
     };
   }
 
@@ -330,19 +319,17 @@ export class ZhipuAdapter implements ModelAdapter {
       };
     }
 
-    const usage: TokenUsage = {
-      inputTokens,
-      outputTokens,
-      cacheReadTokens: cacheHitTokens > 0 ? cacheHitTokens : undefined,
-      contextWindow: this.capabilities.contextWindow,
-      contextPercent:
-        this.capabilities.contextWindow > 0
-          ? Math.round((inputTokens / this.capabilities.contextWindow) * 100)
-          : null,
+    const usage = enrichUsage(
+      buildNormalizedUsage("zhipu", {
+        prompt_tokens: inputTokens,
+        completion_tokens: outputTokens,
+        prompt_tokens_details: { cached_tokens: cacheHitTokens > 0 ? cacheHitTokens : undefined },
+      }),
+      this.capabilities.contextWindow,
       modelName,
-      provider: this.provider,
-      thinkingEffort: options?.reasoningEffort,
-    };
+      this.provider,
+      options?.reasoningEffort,
+    );
     this.lastUsage = usage;
     yield {
       type: "finish",

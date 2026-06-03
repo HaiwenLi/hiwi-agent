@@ -10,7 +10,7 @@ import type {
   TokenUsage,
   ToolDefinition,
 } from "../types.js";
-import { createThinkContext, endsWithPartialTag, processThinkStream, safeJsonParse, stripThinkTags } from "./adapter-utils.js";
+import { buildNormalizedUsage, createThinkContext, endsWithPartialTag, enrichUsage, processThinkStream, safeJsonParse, stripThinkTags } from "./adapter-utils.js";
 
 export const OPENAI_COMPAT_MODELS: Record<string, ModelCapabilities> = {
   "abab-7": { tools: true, vision: false, maxTokens: 8_192, contextWindow: 128_000 },
@@ -22,47 +22,6 @@ const DEFAULT_CAPABILITIES: ModelCapabilities = {
   maxTokens: 16384,
   contextWindow: 128_000,
 };
-
-function buildUsage(raw: {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  prompt_cache_hit_tokens?: number;
-  prompt_cache_miss_tokens?: number;
-  cached_tokens?: number;
-}): TokenUsage {
-  const inputTokens = raw.prompt_tokens ?? 0;
-  const outputTokens = raw.completion_tokens ?? 0;
-  // DeepSeek cache format
-  const cacheHit = raw.prompt_cache_hit_tokens;
-  const cacheMiss = raw.prompt_cache_miss_tokens;
-  // Kimi cache format
-  const cached = raw.cached_tokens;
-
-  return {
-    inputTokens,
-    outputTokens,
-    cacheReadTokens: cacheHit ?? cached,
-    cacheWriteTokens: cacheMiss,
-  };
-}
-
-function enrichUsage(
-  usage: TokenUsage,
-  contextWindow: number,
-  modelName: string,
-  provider: string,
-  thinkingEffort?: string,
-): TokenUsage {
-  return {
-    ...usage,
-    contextWindow,
-    contextPercent:
-      contextWindow > 0 ? Math.round((usage.inputTokens / contextWindow) * 100) : null,
-    modelName,
-    provider,
-    thinkingEffort,
-  };
-}
 
 export class OpenAICompatAdapter implements ModelAdapter {
   id: string;
@@ -147,7 +106,14 @@ export class OpenAICompatAdapter implements ModelAdapter {
       })),
       finishReason: choice.finish_reason === "tool_calls" ? "tool-calls" : "stop",
       usage: enrichUsage(
-        buildUsage(response.usage ?? {}),
+        buildNormalizedUsage(this.provider, {
+          prompt_tokens: response.usage?.prompt_tokens,
+          completion_tokens: response.usage?.completion_tokens,
+          prompt_cache_hit_tokens: (response.usage as any)?.prompt_cache_hit_tokens,
+          prompt_cache_miss_tokens: (response.usage as any)?.prompt_cache_miss_tokens,
+          cached_tokens: (response.usage as any)?.cached_tokens,
+          prompt_tokens_details: (response.usage as any)?.prompt_tokens_details,
+        }),
         this.capabilities.contextWindow,
         response.model,
         this.provider,
@@ -194,6 +160,9 @@ export class OpenAICompatAdapter implements ModelAdapter {
     let finishReason = "stop";
     let inputTokens = 0;
     let outputTokens = 0;
+    let cacheHitTokens: number | undefined;
+    let cacheMissTokens: number | undefined;
+    let cachedTokens: number | undefined;
     const thinkCtx = createThinkContext();
 
     for await (const chunk of stream) {
@@ -234,6 +203,10 @@ export class OpenAICompatAdapter implements ModelAdapter {
       if (chunk.usage) {
         inputTokens = chunk.usage.prompt_tokens;
         outputTokens = chunk.usage.completion_tokens;
+        const raw = chunk.usage as any;
+        if (raw.prompt_cache_hit_tokens) cacheHitTokens = raw.prompt_cache_hit_tokens;
+        if (raw.prompt_cache_miss_tokens) cacheMissTokens = raw.prompt_cache_miss_tokens;
+        if (raw.cached_tokens) cachedTokens = raw.cached_tokens;
       }
     }
 
@@ -254,7 +227,13 @@ export class OpenAICompatAdapter implements ModelAdapter {
     }
 
     const usage = enrichUsage(
-      buildUsage({ prompt_tokens: inputTokens, completion_tokens: outputTokens }),
+      buildNormalizedUsage(this.provider, {
+        prompt_tokens: inputTokens,
+        completion_tokens: outputTokens,
+        prompt_cache_hit_tokens: cacheHitTokens,
+        prompt_cache_miss_tokens: cacheMissTokens,
+        cached_tokens: cachedTokens,
+      }),
       this.capabilities.contextWindow,
       modelName,
       this.provider,

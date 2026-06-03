@@ -215,5 +215,26 @@ describe("KimiAdapter", () => {
       expect(text).toHaveLength(1);
       expect(text[0].text).toBe("Answer");
     });
+
+    it("captures cache tokens in streaming mode", async () => {
+      const chunks = [
+        { choices: [{ delta: { content: "Hello" } }], model: "kimi-k2.6" },
+        { choices: [{ delta: {}, finish_reason: "stop" }], model: "kimi-k2.6",
+          usage: { prompt_tokens: 6000, completion_tokens: 800, cached_tokens: 3000 } },
+      ];
+      mockCreate.mockImplementation(async function* () {
+        for (const chunk of chunks) yield chunk;
+      });
+
+      const adapter = new KimiAdapter({ apiKey: "sk-kimi" });
+      const events = [];
+      for await (const event of adapter.stream([{ role: "user", content: "hi" }])) {
+        events.push(event);
+      }
+      const finish = events.find((e) => e.type === "finish");
+      expect(finish.usage.inputTokens).toBe(3000); // 6000 - 3000
+      expect(finish.usage.cacheReadTokens).toBe(3000);
+      expect(finish.usage.totalTokens).toBe(6800);
+    });
   });
 });

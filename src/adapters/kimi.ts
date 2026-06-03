@@ -10,7 +10,7 @@ import type {
   TokenUsage,
   ToolDefinition,
 } from "../types.js";
-import { createThinkContext, endsWithPartialTag, processThinkStream, safeJsonParse, stripThinkTags } from "./adapter-utils.js";
+import { buildNormalizedUsage, createThinkContext, enrichUsage, endsWithPartialTag, processThinkStream, safeJsonParse, stripThinkTags } from "./adapter-utils.js";
 
 export const KIMI_MODELS: Record<string, ModelCapabilities> = {
   "kimi-k2.6": { tools: true, vision: true, maxTokens: 32_000, contextWindow: 262_144 },
@@ -26,34 +26,6 @@ const DEFAULT_CAPABILITIES: ModelCapabilities = {
   maxTokens: 16384,
   contextWindow: 128_000,
 };
-
-function buildUsage(raw: {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  cached_tokens?: number;
-}): TokenUsage {
-  return {
-    inputTokens: raw.prompt_tokens ?? 0,
-    outputTokens: raw.completion_tokens ?? 0,
-    cacheReadTokens: raw.cached_tokens,
-  };
-}
-
-function enrichUsage(
-  usage: TokenUsage,
-  contextWindow: number,
-  modelName: string,
-  thinkingEffort?: string,
-): TokenUsage {
-  return {
-    ...usage,
-    contextWindow,
-    contextPercent: contextWindow > 0 ? Math.round((usage.inputTokens / contextWindow) * 100) : null,
-    modelName,
-    provider: "kimi",
-    thinkingEffort,
-  };
-}
 
 export class KimiAdapter implements ModelAdapter {
   id: string;
@@ -127,9 +99,14 @@ export class KimiAdapter implements ModelAdapter {
       })),
       finishReason: choice.finish_reason === "tool_calls" ? "tool-calls" : "stop",
       usage: enrichUsage(
-        buildUsage(response.usage ?? {}),
+        buildNormalizedUsage("kimi", {
+          prompt_tokens: response.usage?.prompt_tokens,
+          completion_tokens: response.usage?.completion_tokens,
+          cached_tokens: (response.usage as any)?.cached_tokens,
+        }),
         this.capabilities.contextWindow,
         response.model,
+        this.provider,
         options?.reasoningEffort,
       ),
     };
@@ -170,6 +147,7 @@ export class KimiAdapter implements ModelAdapter {
     let finishReason = "stop";
     let inputTokens = 0;
     let outputTokens = 0;
+    let cachedTokens: number | undefined;
     const thinkCtx = createThinkContext();
 
     for await (const chunk of stream) {
@@ -209,6 +187,8 @@ export class KimiAdapter implements ModelAdapter {
       if (chunk.usage) {
         inputTokens = chunk.usage.prompt_tokens;
         outputTokens = chunk.usage.completion_tokens;
+        const raw = chunk.usage as any;
+        if (raw.cached_tokens) cachedTokens = raw.cached_tokens;
       }
     }
 
@@ -228,9 +208,14 @@ export class KimiAdapter implements ModelAdapter {
     }
 
     const usage = enrichUsage(
-      buildUsage({ prompt_tokens: inputTokens, completion_tokens: outputTokens }),
+      buildNormalizedUsage("kimi", {
+        prompt_tokens: inputTokens,
+        completion_tokens: outputTokens,
+        cached_tokens: cachedTokens,
+      }),
       this.capabilities.contextWindow,
       modelName,
+      this.provider,
       options?.reasoningEffort,
     );
     this.lastUsage = usage;
