@@ -35,6 +35,7 @@ export interface TokenUsage {
   outputTokens: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
+  totalTokens?: number;
   contextPercent?: number | null;
   contextWindow?: number;
   modelName?: string;

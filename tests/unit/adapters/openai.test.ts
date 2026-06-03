@@ -119,4 +119,24 @@ describe("OpenAIAdapter", () => {
     expect(toolMsg.role).toBe("tool");
     expect(toolMsg.content).toBe("file content");
   });
+
+  it("extracts cache tokens from prompt_tokens_details", async () => {
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { role: "assistant", content: "Cached!" }, finish_reason: "stop" }],
+      usage: {
+        prompt_tokens: 10000,
+        completion_tokens: 2000,
+        prompt_tokens_details: { cached_tokens: 6000 },
+      },
+      model: "gpt-4o",
+    });
+
+    const adapter = new OpenAIAdapter({ apiKey: "sk-test" });
+    const resp = await adapter.chat([{ role: "user", content: "hi" }]);
+
+    expect(resp.usage.inputTokens).toBe(4000); // 10000 - 6000
+    expect(resp.usage.outputTokens).toBe(2000);
+    expect(resp.usage.cacheReadTokens).toBe(6000);
+    expect(resp.usage.totalTokens).toBe(12000);
+  });
 });

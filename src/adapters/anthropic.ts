@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { buildNormalizedUsage, enrichUsage } from "./adapter-utils.js";
 import type {
   ChatOptions,
   ChatResponse,
@@ -68,19 +69,17 @@ export class AnthropicAdapter implements ModelAdapter {
         input: b.input as Record<string, unknown>,
       })),
       finishReason: response.stop_reason === "tool_use" ? "tool-calls" : "stop",
-      usage: {
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
-        cacheReadTokens: (response.usage as any).cache_read_input_tokens,
-        cacheWriteTokens: (response.usage as any).cache_creation_input_tokens,
-        contextWindow: this.capabilities.contextWindow,
-        contextPercent:
-          this.capabilities.contextWindow > 0
-            ? Math.round((response.usage.input_tokens / this.capabilities.contextWindow) * 100)
-            : null,
-        modelName: response.model,
-        provider: this.provider,
-      },
+      usage: enrichUsage(
+        buildNormalizedUsage("anthropic", {
+          input_tokens: response.usage.input_tokens,
+          output_tokens: response.usage.output_tokens,
+          cache_read_input_tokens: (response.usage as any).cache_read_input_tokens,
+          cache_creation_input_tokens: (response.usage as any).cache_creation_input_tokens,
+        }),
+        this.capabilities.contextWindow,
+        response.model,
+        this.provider,
+      ),
     };
   }
 
@@ -126,19 +125,13 @@ export class AnthropicAdapter implements ModelAdapter {
     }
 
     const finalMessage = await stream.finalMessage();
-    const enrichedUsage: TokenUsage = {
-      inputTokens: finalMessage.usage.input_tokens,
-      outputTokens: finalMessage.usage.output_tokens,
-      cacheReadTokens: (finalMessage.usage as any).cache_read_input_tokens,
-      cacheWriteTokens: (finalMessage.usage as any).cache_creation_input_tokens,
-      contextWindow: this.capabilities.contextWindow,
-      contextPercent:
-        this.capabilities.contextWindow > 0
-          ? Math.round((finalMessage.usage.input_tokens / this.capabilities.contextWindow) * 100)
-          : null,
-      modelName: finalMessage.model,
-      provider: this.provider,
-    };
+    const baseUsage = buildNormalizedUsage("anthropic", {
+      input_tokens: finalMessage.usage.input_tokens,
+      output_tokens: finalMessage.usage.output_tokens,
+      cache_read_input_tokens: (finalMessage.usage as any).cache_read_input_tokens,
+      cache_creation_input_tokens: (finalMessage.usage as any).cache_creation_input_tokens,
+    });
+    const enrichedUsage = enrichUsage(baseUsage, this.capabilities.contextWindow, finalMessage.model, this.provider);
     this.lastUsage = enrichedUsage;
     yield {
       type: "finish",

@@ -1,4 +1,4 @@
-import type { ContentPart } from "../types.js";
+import type { TokenUsage, ContentPart } from "../types.js";
 
 export function extractText(content: string | ContentPart[]): string {
   if (typeof content === "string") return content;
@@ -80,4 +80,89 @@ export function* processThinkStream(
       }
     }
   }
+}
+
+// ─── Token Usage Normalization ──────────────────────────────
+
+export interface RawUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
+  prompt_cache_hit_tokens?: number;
+  prompt_cache_miss_tokens?: number;
+  cached_tokens?: number;
+  prompt_eval_count?: number;
+  eval_count?: number;
+}
+
+export function buildNormalizedUsage(provider: string, raw: RawUsage): TokenUsage {
+  let inputTokens: number;
+  let outputTokens: number;
+  let cacheReadTokens: number | undefined;
+  let cacheWriteTokens: number | undefined;
+
+  if (provider === "anthropic") {
+    inputTokens = raw.input_tokens ?? 0;
+    outputTokens = raw.output_tokens ?? 0;
+    cacheReadTokens = raw.cache_read_input_tokens;
+    cacheWriteTokens = raw.cache_creation_input_tokens;
+  } else if (provider === "ollama") {
+    inputTokens = raw.prompt_eval_count ?? 0;
+    outputTokens = raw.eval_count ?? 0;
+  } else {
+    const promptTokens = raw.prompt_tokens ?? 0;
+    outputTokens = raw.completion_tokens ?? 0;
+
+    cacheReadTokens =
+      raw.prompt_tokens_details?.cached_tokens ??
+      raw.prompt_cache_hit_tokens ??
+      raw.cached_tokens;
+
+    cacheWriteTokens =
+      raw.prompt_tokens_details?.cache_write_tokens ??
+      raw.prompt_cache_miss_tokens;
+
+    const cacheTotal = (cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0);
+    inputTokens = Math.max(0, promptTokens - cacheTotal);
+  }
+
+  const totalTokens =
+    inputTokens +
+    outputTokens +
+    (cacheReadTokens ?? 0) +
+    (cacheWriteTokens ?? 0);
+
+  const result: TokenUsage = {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+  };
+  if (cacheReadTokens != null && cacheReadTokens > 0) result.cacheReadTokens = cacheReadTokens;
+  if (cacheWriteTokens != null && cacheWriteTokens > 0) result.cacheWriteTokens = cacheWriteTokens;
+
+  return result;
+}
+
+export function enrichUsage(
+  usage: TokenUsage,
+  contextWindow: number,
+  modelName: string,
+  provider: string,
+  thinkingEffort?: string,
+): TokenUsage {
+  return {
+    ...usage,
+    contextWindow,
+    contextPercent:
+      contextWindow > 0
+        ? Math.round((usage.inputTokens / contextWindow) * 1000) / 10
+        : null,
+    modelName,
+    provider,
+    thinkingEffort,
+  };
 }

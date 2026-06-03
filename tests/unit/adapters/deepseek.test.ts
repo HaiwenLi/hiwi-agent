@@ -180,4 +180,26 @@ describe("DeepSeekAdapter", () => {
     expect(toolMsg.role).toBe("tool");
     expect(toolMsg.content).toBe("file content");
   });
+
+  it("captures cache tokens in streaming mode", async () => {
+    const chunks = [
+      { choices: [{ delta: { content: "Hello" } }], model: "deepseek-v4-pro" },
+      { choices: [{ delta: {}, finish_reason: "stop" }], model: "deepseek-v4-pro",
+        usage: { prompt_tokens: 8000, completion_tokens: 1000, prompt_cache_hit_tokens: 5000, prompt_cache_miss_tokens: 2000 } },
+    ];
+    mockCreate.mockImplementation(async function* () {
+      for (const chunk of chunks) yield chunk;
+    });
+
+    const adapter = new DeepSeekAdapter({ apiKey: "sk-test" });
+    const events = [];
+    for await (const event of adapter.stream([{ role: "user", content: "hi" }])) {
+      events.push(event);
+    }
+    const finish = events.find((e) => e.type === "finish");
+    expect(finish.usage.inputTokens).toBe(1000); // 8000 - 5000 - 2000
+    expect(finish.usage.cacheReadTokens).toBe(5000);
+    expect(finish.usage.cacheWriteTokens).toBe(2000);
+    expect(finish.usage.totalTokens).toBe(9000);
+  });
 });

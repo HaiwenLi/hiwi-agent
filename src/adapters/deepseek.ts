@@ -9,7 +9,7 @@ import type {
   TokenUsage,
   ToolDefinition,
 } from "../types.js";
-import { createThinkContext, endsWithPartialTag, processThinkStream, safeJsonParse, stripThinkTags } from "./adapter-utils.js";
+import { buildNormalizedUsage, createThinkContext, enrichUsage, endsWithPartialTag, processThinkStream, safeJsonParse, stripThinkTags } from "./adapter-utils.js";
 
 export const DEEPSEEK_MODELS: Record<string, ModelCapabilities> = {
   "deepseek-v4-pro": { tools: true, vision: false, maxTokens: 384_000, contextWindow: 1_000_000 },
@@ -21,36 +21,6 @@ const DEFAULT_MODEL = "deepseek-v4-pro";
 
 const THINKING_DEFAULT = { type: "enabled" as const };
 const REASONING_EFFORT_DEFAULT = "high";
-
-function buildUsage(raw: {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  prompt_cache_hit_tokens?: number;
-  prompt_cache_miss_tokens?: number;
-}): TokenUsage {
-  return {
-    inputTokens: raw.prompt_tokens ?? 0,
-    outputTokens: raw.completion_tokens ?? 0,
-    cacheReadTokens: raw.prompt_cache_hit_tokens,
-    cacheWriteTokens: raw.prompt_cache_miss_tokens,
-  };
-}
-
-function enrichUsage(
-  usage: TokenUsage,
-  contextWindow: number,
-  modelName: string,
-  thinkingEffort?: string,
-): TokenUsage {
-  return {
-    ...usage,
-    contextWindow,
-    contextPercent: contextWindow > 0 ? Math.round((usage.inputTokens / contextWindow) * 100) : null,
-    modelName,
-    provider: "deepseek",
-    thinkingEffort,
-  };
-}
 
 export class DeepSeekAdapter implements ModelAdapter {
   id: string;
@@ -118,9 +88,15 @@ export class DeepSeekAdapter implements ModelAdapter {
       })),
       finishReason: choice.finish_reason === "tool_calls" ? "tool-calls" : "stop",
       usage: enrichUsage(
-        buildUsage(response.usage ?? {}),
+        buildNormalizedUsage("deepseek", {
+          prompt_tokens: response.usage?.prompt_tokens,
+          completion_tokens: response.usage?.completion_tokens,
+          prompt_cache_hit_tokens: (response.usage as any)?.prompt_cache_hit_tokens,
+          prompt_cache_miss_tokens: (response.usage as any)?.prompt_cache_miss_tokens,
+        }),
         this.capabilities.contextWindow,
         response.model,
+        this.provider,
         options?.reasoningEffort ?? REASONING_EFFORT_DEFAULT,
       ),
     };
@@ -158,6 +134,8 @@ export class DeepSeekAdapter implements ModelAdapter {
     let finishReason = "stop";
     let inputTokens = 0;
     let outputTokens = 0;
+    let cacheHitTokens: number | undefined;
+    let cacheMissTokens: number | undefined;
     const thinkCtx = createThinkContext();
 
     for await (const chunk of stream) {
@@ -196,6 +174,9 @@ export class DeepSeekAdapter implements ModelAdapter {
       if (chunk.usage) {
         inputTokens = chunk.usage.prompt_tokens;
         outputTokens = chunk.usage.completion_tokens;
+        const raw = chunk.usage as any;
+        if (raw.prompt_cache_hit_tokens) cacheHitTokens = raw.prompt_cache_hit_tokens;
+        if (raw.prompt_cache_miss_tokens) cacheMissTokens = raw.prompt_cache_miss_tokens;
       }
     }
 
@@ -215,9 +196,15 @@ export class DeepSeekAdapter implements ModelAdapter {
     }
 
     const usage = enrichUsage(
-      buildUsage({ prompt_tokens: inputTokens, completion_tokens: outputTokens }),
+      buildNormalizedUsage("deepseek", {
+        prompt_tokens: inputTokens,
+        completion_tokens: outputTokens,
+        prompt_cache_hit_tokens: cacheHitTokens,
+        prompt_cache_miss_tokens: cacheMissTokens,
+      }),
       this.capabilities.contextWindow,
       modelName,
+      this.provider,
       options?.reasoningEffort ?? REASONING_EFFORT_DEFAULT,
     );
     this.lastUsage = usage;

@@ -9,7 +9,7 @@ import type {
   TokenUsage,
   ToolDefinition,
 } from "../types.js";
-import { safeJsonParse } from "./adapter-utils.js";
+import { buildNormalizedUsage, enrichUsage, safeJsonParse } from "./adapter-utils.js";
 
 export const OPENAI_MODELS: Record<string, ModelCapabilities> = {
   "gpt-4o": { tools: true, vision: true, maxTokens: 16_384, contextWindow: 128_000 },
@@ -17,16 +17,6 @@ export const OPENAI_MODELS: Record<string, ModelCapabilities> = {
 };
 
 const DEFAULT_MODEL = "gpt-4o";
-
-function buildUsage(raw: {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-}): TokenUsage {
-  return {
-    inputTokens: raw.prompt_tokens ?? 0,
-    outputTokens: raw.completion_tokens ?? 0,
-  };
-}
 
 export class OpenAIAdapter implements ModelAdapter {
   id: string;
@@ -82,17 +72,16 @@ export class OpenAIAdapter implements ModelAdapter {
         input: safeJsonParse(t.function.arguments),
       })),
       finishReason: choice.finish_reason === "tool_calls" ? "tool-calls" : "stop",
-      usage: {
-        inputTokens: response.usage?.prompt_tokens ?? 0,
-        outputTokens: response.usage?.completion_tokens ?? 0,
-        contextWindow: this.capabilities.contextWindow,
-        contextPercent:
-          this.capabilities.contextWindow > 0
-            ? Math.round(((response.usage?.prompt_tokens ?? 0) / this.capabilities.contextWindow) * 100)
-            : null,
-        modelName: response.model,
-        provider: this.provider,
-      },
+      usage: enrichUsage(
+        buildNormalizedUsage("openai", {
+          prompt_tokens: response.usage?.prompt_tokens,
+          completion_tokens: response.usage?.completion_tokens,
+          prompt_tokens_details: (response.usage as any)?.prompt_tokens_details,
+        }),
+        this.capabilities.contextWindow,
+        response.model,
+        this.provider,
+      ),
     };
   }
 
@@ -123,6 +112,8 @@ export class OpenAIAdapter implements ModelAdapter {
     let finishReason = "stop";
     let inputTokens = 0;
     let outputTokens = 0;
+    let cacheReadTokens: number | undefined;
+    let cacheWriteTokens: number | undefined;
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta as Record<string, unknown> | undefined;
@@ -155,6 +146,9 @@ export class OpenAIAdapter implements ModelAdapter {
       if (chunk.usage) {
         inputTokens = chunk.usage.prompt_tokens;
         outputTokens = chunk.usage.completion_tokens;
+        const details = (chunk.usage as any)?.prompt_tokens_details;
+        if (details?.cached_tokens) cacheReadTokens = details.cached_tokens;
+        if (details?.cache_write_tokens) cacheWriteTokens = details.cache_write_tokens;
       }
     }
 
@@ -169,17 +163,19 @@ export class OpenAIAdapter implements ModelAdapter {
       };
     }
 
-    const usage = {
-      inputTokens,
-      outputTokens,
-      contextWindow: this.capabilities.contextWindow,
-      contextPercent:
-        this.capabilities.contextWindow > 0
-          ? Math.round((inputTokens / this.capabilities.contextWindow) * 100)
-          : null,
+    const usage = enrichUsage(
+      buildNormalizedUsage("openai", {
+        prompt_tokens: inputTokens,
+        completion_tokens: outputTokens,
+        prompt_tokens_details: {
+          cached_tokens: cacheReadTokens,
+          cache_write_tokens: cacheWriteTokens,
+        },
+      }),
+      this.capabilities.contextWindow,
       modelName,
-      provider: this.provider,
-    };
+      this.provider,
+    );
     this.lastUsage = usage;
     yield {
       type: "finish",

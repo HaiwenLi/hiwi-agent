@@ -76,7 +76,22 @@
       "Bash(OLLAMA_MODELS=\"D:/models\" D:/Ollama/ollama.exe list *)",
       "Bash(powershell *)",
       "Bash(python3 -c ' *)",
-      "Bash(xargs grep -l \"usage\\\\|token\")"
+      "Bash(xargs grep -l \"usage\\\\|token\")",
+      "Bash(xargs grep -l \"usage.*input\\\\|usage.*output\\\\|cacheRead\\\\|cacheWrite\")",
+      "Bash(xargs grep -B5 -A5 \"usage:\")",
+      "Bash(xargs grep -n \"usage.*input.*output\")",
+      "Bash(xargs grep -B3 -A3 \"input.*output.*tokens\\\\|tokens.*input.*output\")",
+      "Bash(xargs grep -n \"cacheRead\\\\|cacheWrite\")",
+      "Bash(rtk grep *)",
+      "Bash(xargs grep -l \"console.log.*usage\\\\|console.log.*token\")",
+      "Bash(xargs grep -l \"displayUsage\\\\|showUsage\\\\|renderUsage\")",
+      "Bash(xargs grep -B5 -A5 \"Turn.*completed\\\\|usage.*display\")",
+      "Bash(xargs grep -n \"console\")",
+      "Bash(xargs grep -n \"console.log.*usage\\\\|console.log.*token\")",
+      "Bash(xargs grep -n \"message.*usage\")",
+      "Bash(xargs grep -n \"console\\\\|log\")",
+      "Bash(xargs grep -A5 -B5 \"complete.*function\\\\|complete.*command\")",
+      "Bash(rtk pnpm *)"
     ]
   }
 }
