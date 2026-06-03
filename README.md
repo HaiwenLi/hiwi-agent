@@ -5,7 +5,7 @@ Personal AI agent with persistent memory, multi-model support, and reusable skil
 ## Features
 
 - **Hybrid Memory** — MEMORY.md index + mem0 semantic search with local Ollama embeddings
-- **Multi-Provider** — DeepSeek, OpenAI, Anthropic, Kimi, Zhipu (GLM), MiniMax, Ollama via dedicated adapters with thinking/reasoning, structured JSON output, and tool_choice
+- **Multi-Provider** — DeepSeek, OpenAI, Anthropic, Kimi, Zhipu (GLM), MiniMax, Ollama via dedicated adapters with thinking/reasoning, structured JSON output, tool_choice, and streaming tool calls
 - **Vision Support** — Multimodal image input via `ContentPart[]` message format, `read_image` tool with base64 encoding, and content-parts injection pipeline from tool results to model
 - **Skill System** — Markdown-based SKILL.md files with frontmatter, supports domain/workflow/meta skill types
 - **Terminal UI** — pi-based differential rendering engine with animated thinking loader, streaming markdown output, reasoning display (collapsible), slash-command popup, and token usage status bar
@@ -171,20 +171,21 @@ The TUI supports real-time streaming with visual separation of thinking and mode
 - **Output fold** — Assistant responses >50 rendered lines auto-fold to 15-line preview. First `Ctrl+O` expands the most recent folded output, subsequent toggles thinking panel
 - **Animated loader** — Braille spinner during thinking phases
 - **Thinking effort** — Configurable via `/effort` command (low/medium/high/max) or `thinkingEffort` in config. Shown in status bar as `[effort]`
-- **Default thinking** — Automatically enabled for DeepSeek and Kimi K2.x models. DeepSeek defaults to `reasoning_effort: "high"`
+- **Default streaming** — Streaming always enabled for DeepSeek, Kimi, MiniMax, and Zhipu (GLM) models, regardless of config
+- **Default thinking** — Automatically enabled for DeepSeek, Kimi K2.x, GLM-5/4.7/4.6, and MiniMax-M3 models. DeepSeek defaults to `reasoning_effort: "high"`
 - **Multi-turn reasoning** — `reasoning_content` is persisted across turns and passed back to DeepSeek API (required to avoid 400 errors)
 - **Token tracking** — Input/output token counts with context window percentage in the status bar. Falls back to content-length estimation when the API doesn't return usage in streaming mode. Cache read/write tokens tracked for DeepSeek and Anthropic
 - **Adapter support** — All adapters emit `reasoning-delta` events:
 
-| Adapter | Reasoning Mechanism |
-|---------|-------------------|
-| DeepSeek | `reasoning_content` in delta + `<think>` XML tag parsing + `extra_body.thinking` |
-| OpenAI | Standard chat completions (no reasoning) |
-| Anthropic | `thinking_delta` SDK event |
-| Kimi (openai-compat) | `reasoning_content` in delta + `extra_body.thinking` with `keep:all` |
-| Zhipu (GLM) | `reasoning_content` in delta |
-| MiniMax | `reasoning_content` in delta + `<think>` XML tag parsing |
-| Ollama | `reasoning_content` in message/delta |
+| Adapter | Reasoning Mechanism | Default Streaming |
+|---------|-------------------|-------------------|
+| DeepSeek | `reasoning_content` in delta + `<think>` XML tag parsing + `extra_body.thinking` | ✅ Forced |
+| Kimi | `reasoning_content` in delta + `extra_body.thinking` with `keep:all` | ✅ Forced |
+| Zhipu (GLM) | `reasoning_content` in delta + `tool_stream` for tool calls | ✅ Forced |
+| MiniMax | `reasoning_content` in delta + `<think>` XML tag parsing | ✅ Forced |
+| Anthropic | `thinking_delta` SDK event | Config-based |
+| OpenAI | Standard chat completions (no reasoning) | Config-based |
+| Ollama | `reasoning_content` in message/delta | Config-based |
 
 ### Keyboard Shortcuts
 
@@ -204,6 +205,7 @@ All adapters support OpenAI-compatible `response_format` and `tool_choice` param
 - **JSON mode** — Set `response_format: { type: "json_object" }` in `ChatOptions`. Supported by DeepSeek, Kimi (object-only), Zhipu (glm-4.7+), and Anthropic
 - **Strict tool mode** — DeepSeek Beta supports `strict: true` on tool function definitions with JSON Schema enforcement (`base_url` must point to `https://api.deepseek.com/beta`)
 - **Tool choice** — Control tool invocation with `tool_choice`: `"auto"`, `"none"`, `"required"`, or specific function. Anthropic uses translated enum (`"any"`/`"tool"`)
+- **Streaming tool calls** — Zhipu (GLM) models support `tool_stream: true` for real-time tool call argument streaming. DeepSeek, Kimi, and MiniMax stream tool calls natively via OpenAI-compatible `delta.tool_calls`
 
 See [docs/model_comparison.md](docs/model_comparison.md) for the full provider capability matrix and known quirks.
 
@@ -248,8 +250,8 @@ hiwi-agent/
 ├── src/
 │   ├── core/           # Agent loop, tool registry, config
 │   ├── adapters/       # Dedicated adapters per provider
-│   │                   #   DeepSeek (thinking defaults), OpenAI, Anthropic,
-│   │                   #   OpenAI-compat (Kimi/abab), Zhipu, MiniMax, Ollama, Mock
+│   │                   #   DeepSeek, OpenAI, Anthropic, Kimi,
+│   │                   #   OpenAI-compat (abab), Zhipu, MiniMax, Ollama, Mock
 │   ├── memory/         # MEMORY.md, mem0, compaction, auto-extraction
 │   ├── skills/         # SKILL.md loader, executor, composer, importer
 │   ├── tools/          # 21+ built-in tools (including read_image)
