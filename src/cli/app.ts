@@ -22,6 +22,16 @@ export interface AppCallbacks {
   onPauseRequest?: () => void;
 }
 
+/** A single item shown in a picker popup */
+export interface PickerItem {
+  /** Display label (e.g. "claude-sonnet-4-6") */
+  label: string;
+  /** Secondary info shown after label (e.g. "anthropic") */
+  detail?: string;
+  /** The value to pass to onInput when selected (e.g. "/model claude-sonnet-4-6") */
+  value: string;
+}
+
 const MAX_LINES = 500;
 const THINKING_PREVIEW_LINES = 3;
 const THINKING_MAX_FOLDED = 6;
@@ -71,6 +81,11 @@ class ChatComponent implements Component {
 	private allCommands: SlashCommand[] = [];
 	private popupVisible = false;
 	private popupIndex = 0;
+
+	// Picker popup state (model/provider selection)
+	private pickerItems: PickerItem[] = [];
+	private pickerVisible = false;
+	private pickerIndex = 0;
 
 	// Loader for animated thinking indicator
 	private loader: Loader | null = null;
@@ -137,7 +152,9 @@ class ChatComponent implements Component {
 		result.push(separator);
 
 		// Popup (rendered above input line)
-		if (this.popupVisible) {
+		if (this.pickerVisible) {
+			result.push(...this.renderPicker(width));
+		} else if (this.popupVisible) {
 			result.push(...this.renderPopup(width));
 		}
 
@@ -242,6 +259,53 @@ class ChatComponent implements Component {
 
   handleInput(data: string): void {
     if (isKeyRelease(data)) return;
+
+    // Picker mode takes priority over all other input
+    if (this.pickerVisible) {
+      if (matchesKey(data, Key.up)) {
+        this.pickerIndex = Math.max(0, this.pickerIndex - 1);
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, Key.down)) {
+        this.pickerIndex = Math.min(
+          Math.min(this.filteredPickerItems.length, POPOUP_MAX_VISIBLE) - 1,
+          this.pickerIndex + 1,
+        );
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, Key.enter)) {
+        const item = this.filteredPickerItems[this.pickerIndex];
+        if (item) {
+          this.pickerVisible = false;
+          this.pickerItems = [];
+          this.input = "";
+          this.requestRender();
+          this.submitPickerItem(item);
+        }
+        return;
+      }
+      if (matchesKey(data, Key.escape)) {
+        this.pickerVisible = false;
+        this.pickerItems = [];
+        this.input = "";
+        this.requestRender();
+        return;
+      }
+      // Filter picker items by typed characters
+      const printable = decodePrintableKey(data) ?? this.decodeRawPrintable(data);
+      if (printable) {
+        this.input += printable;
+        this.updatePickerFilter();
+        this.requestRender();
+      } else if (matchesKey(data, Key.backspace)) {
+        this.input = this.input.slice(0, -1);
+        this.updatePickerFilter();
+        this.requestRender();
+      }
+      return;
+    }
 
     // ESC during processing → pause the agent
     if (this.processing && matchesKey(data, Key.escape)) {
@@ -361,12 +425,16 @@ class ChatComponent implements Component {
 	private updatePopupState(): void {
 		if (this.input.startsWith("/")) {
 			const filtered = this.getFilteredCommands();
-			this.popupVisible = filtered.length > 0;
-			if (this.popupVisible) {
+			if (filtered.length > 0) {
+				this.popupVisible = true;
 				this.popupIndex = Math.min(this.popupIndex, Math.min(filtered.length, POPOUP_MAX_VISIBLE) - 1);
+			} else {
+				this.popupVisible = false;
+				this.popupIndex = 0;
 			}
 		} else {
 			this.popupVisible = false;
+			this.popupIndex = 0;
 		}
 	}
 
@@ -412,6 +480,75 @@ class ChatComponent implements Component {
 		this.loader?.stop();
 	}
 
+	/** Show a picker popup with the given items. */
+	showPicker(items: PickerItem[]): void {
+		this.pickerItems = items;
+		this.filteredPickerItems = items;
+		this.pickerIndex = 0;
+		this.pickerVisible = items.length > 0;
+		this.input = "";
+		this.requestRender();
+	}
+
+	private filteredPickerItems: PickerItem[] = [];
+
+	private updatePickerFilter(): void {
+		const query = this.input.toLowerCase();
+		this.filteredPickerItems = query
+			? this.pickerItems.filter(
+				(item) =>
+					item.label.toLowerCase().includes(query) ||
+					(item.detail?.toLowerCase().includes(query) ?? false),
+			)
+			: this.pickerItems;
+		this.pickerIndex = Math.min(this.pickerIndex, Math.max(0, this.filteredPickerItems.length - 1));
+	}
+
+	private renderPicker(width: number): string[] {
+		const items = this.filteredPickerItems;
+		if (items.length === 0) return ["[90m  No matches (Esc to cancel)[0m"];
+
+		const visible = items.slice(0, POPOUP_MAX_VISIBLE);
+		const lines: string[] = [];
+
+		for (let i = 0; i < visible.length; i++) {
+			const item = visible[i];
+			const selected = i === this.pickerIndex;
+			const labelCol = item.label.padEnd(24);
+			const detail = item.detail ? ` ${item.detail}` : "";
+			const content = `${labelCol}${detail}`;
+			if (selected) {
+				const line = `[44;37m ${truncateToWidth(content, width - 2)} [0m`;
+				lines.push(line + " ".repeat(Math.max(0, width - visibleWidth(line))));
+			} else {
+				lines.push(`[90m ${truncateToWidth(content, width - 2)} [0m`);
+			}
+		}
+
+		if (items.length > POPOUP_MAX_VISIBLE) {
+			lines.push(`[90m   ... +${items.length - POPOUP_MAX_VISIBLE} more[0m`);
+		}
+
+		if (this.input) {
+			lines.push(`[90m  Filter: ${this.input}[0m`);
+		} else {
+			lines.push(`[90m  Type to filter, Enter to select, Esc to cancel[0m`);
+		}
+
+		return lines;
+	}
+
+	private submitPickerItem(item: PickerItem): void {
+		this.processing = true;
+		this.loader?.start();
+		this.requestRender();
+		this.callbacks.onInput(item.value).then(() => {
+			this.processing = false;
+			this.loader?.stop();
+			this.requestRender();
+		});
+	}
+
 	private pushLine(text: string, role: OutputLine["role"]): void {
 		this.lines.push({ id: this.nextId++, text, role });
 		if (this.lines.length > MAX_LINES) {
@@ -442,6 +579,8 @@ export interface AppHandle {
   waitUntilExit: () => Promise<void>;
   /** Called when ESC is pressed during agent processing */
   onPauseRequest?: () => void;
+  /** Show an interactive picker popup */
+  showPicker: (items: PickerItem[]) => void;
 }
 
 export function createApp(callbacks: AppCallbacks): AppHandle {
@@ -468,8 +607,9 @@ export function createApp(callbacks: AppCallbacks): AppHandle {
 			chat.stopAll();
 			tui.stop();
 		},
-		waitUntilExit: () => exitPromise,
-	};
+			waitUntilExit: () => exitPromise,
+			showPicker: (items) => chat.showPicker(items),
+		};
 
 	// Pause request: ESC → ChatComponent → AppHandle.onPauseRequest
 	handle.onPauseRequest = () => {

@@ -40,13 +40,13 @@ export class AnthropicAdapter implements ModelAdapter {
       max_tokens: options?.maxTokens ?? this.capabilities.maxTokens,
       system: system ?? undefined,
       messages: convertedMessages,
-      tools: options?.tools ? this.convertTools(options.tools) : undefined,
+      tools: options?.toolChoice === "none" ? undefined : (options?.tools ? this.convertTools(options.tools) : undefined),
       temperature: options?.temperature,
     };
     if (options?.responseFormat?.type === "json_object") {
       params.response_format = { type: "json_object" };
     }
-    if (options?.toolChoice) {
+    if (options?.toolChoice && options.toolChoice !== "none") {
       params.tool_choice = this.convertToolChoice(options.toolChoice);
     }
     if (options?.thinking) {
@@ -91,13 +91,13 @@ export class AnthropicAdapter implements ModelAdapter {
       max_tokens: options?.maxTokens ?? this.capabilities.maxTokens,
       system: system ?? undefined,
       messages: convertedMessages,
-      tools: options?.tools ? this.convertTools(options.tools) : undefined,
+      tools: options?.toolChoice === "none" ? undefined : (options?.tools ? this.convertTools(options.tools) : undefined),
       temperature: options?.temperature,
     };
     if (options?.responseFormat?.type === "json_object") {
       params.response_format = { type: "json_object" };
     }
-    if (options?.toolChoice) {
+    if (options?.toolChoice && options.toolChoice !== "none") {
       params.tool_choice = this.convertToolChoice(options.toolChoice);
     }
     if (options?.thinking) {
@@ -197,6 +197,26 @@ export class AnthropicAdapter implements ModelAdapter {
           }
         }
         converted.push({ role: "assistant", content });
+
+        // Emit tool_result immediately after the assistant tool_use message
+        // (Anthropic API requires tool_result to directly follow tool_use)
+        if (msg.toolCalls?.length) {
+          const results: Anthropic.ToolResultBlockParam[] = [];
+          for (const tc of msg.toolCalls) {
+            const resultContent = toolResults.get(tc.id);
+            if (resultContent !== undefined) {
+              results.push({
+                type: "tool_result",
+                tool_use_id: tc.id,
+                content: resultContent,
+              });
+            }
+          }
+          if (results.length > 0) {
+            converted.push({ role: "user", content: results });
+          }
+        }
+
         continue;
       }
 
@@ -222,21 +242,6 @@ export class AnthropicAdapter implements ModelAdapter {
       }
     }
 
-    const assistantMsgs = messages.filter((m) => m.role === "assistant" && m.toolCalls?.length);
-    for (const am of assistantMsgs) {
-      const results: Anthropic.ToolResultBlockParam[] = [];
-      for (const tc of am.toolCalls ?? []) {
-        results.push({
-          type: "tool_result",
-          tool_use_id: tc.id,
-          content: toolResults.get(tc.id) ?? "",
-        });
-      }
-      if (results.length > 0) {
-        converted.push({ role: "user", content: results });
-      }
-    }
-
     return { system, convertedMessages: converted };
   }
 
@@ -257,6 +262,7 @@ export class AnthropicAdapter implements ModelAdapter {
         case "required":
           return { type: "any" };
         case "none":
+          // Anthropic has no "none" type — return auto but caller should omit tools
           return { type: "auto" };
       }
     }

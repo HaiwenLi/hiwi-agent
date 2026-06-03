@@ -19,26 +19,15 @@ describe("OpenAICompatAdapter", () => {
     vi.clearAllMocks();
   });
 
-  it("creates adapter for OpenAI provider", () => {
+  it("creates adapter with custom provider", () => {
     const adapter = new OpenAICompatAdapter({
-      provider: "openai",
+      provider: "custom",
       apiKey: "sk-test",
-      model: "gpt-4o",
+      model: "custom-model",
     });
-    expect(adapter.id).toBe("gpt-4o");
-    expect(adapter.provider).toBe("openai");
+    expect(adapter.id).toBe("custom-model");
+    expect(adapter.provider).toBe("custom");
     expect(adapter.capabilities.contextWindow).toBe(128_000);
-  });
-
-  it("creates adapter for Kimi with custom baseUrl", () => {
-    const adapter = new OpenAICompatAdapter({
-      provider: "kimi",
-      apiKey: "sk-kimi",
-      baseUrl: "https://api.moonshot.cn/v1",
-      model: "kimi-k2.6",
-    });
-    expect(adapter.provider).toBe("kimi");
-    expect(adapter.id).toBe("kimi-k2.6");
   });
 
   it("converts and returns text response", async () => {
@@ -52,7 +41,7 @@ describe("OpenAICompatAdapter", () => {
       usage: { prompt_tokens: 10, completion_tokens: 5 },
     });
 
-    const adapter = new OpenAICompatAdapter({ provider: "openai", apiKey: "sk-test" });
+    const adapter = new OpenAICompatAdapter({ provider: "custom", apiKey: "sk-test" });
     const resp = await adapter.chat([{ role: "user", content: "hi" }]);
 
     expect(resp.content).toBe("Hello!");
@@ -82,7 +71,7 @@ describe("OpenAICompatAdapter", () => {
       usage: { prompt_tokens: 15, completion_tokens: 20 },
     });
 
-    const adapter = new OpenAICompatAdapter({ provider: "openai", apiKey: "sk-test" });
+    const adapter = new OpenAICompatAdapter({ provider: "custom", apiKey: "sk-test" });
     const resp = await adapter.chat([{ role: "user", content: "read" }]);
 
     expect(resp.toolCalls).toHaveLength(1);
@@ -105,7 +94,7 @@ describe("OpenAICompatAdapter", () => {
       usage: { prompt_tokens: 30, completion_tokens: 5 },
     });
 
-    const adapter = new OpenAICompatAdapter({ provider: "openai", apiKey: "sk-test" });
+    const adapter = new OpenAICompatAdapter({ provider: "custom", apiKey: "sk-test" });
     await adapter.chat([
       { role: "user", content: "read" },
       {
@@ -122,21 +111,34 @@ describe("OpenAICompatAdapter", () => {
     expect(toolMsg.content).toBe("file content");
   });
 
-  it("uses model-specific capabilities", () => {
-    const kimi = new OpenAICompatAdapter({
-      provider: "kimi",
-      apiKey: "sk-test",
-      model: "kimi-k2.6",
+  it("sends thinking and reasoning_effort when explicitly set", async () => {
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { role: "assistant", content: "OK" }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 5, completion_tokens: 2 },
     });
-    expect(kimi.capabilities.contextWindow).toBe(262_144);
-    expect(kimi.capabilities.vision).toBe(true);
 
-    const unknown = new OpenAICompatAdapter({
-      provider: "custom",
-      apiKey: "sk-test",
-      model: "unknown-model",
+    const adapter = new OpenAICompatAdapter({ provider: "custom", apiKey: "sk-test" });
+    await adapter.chat([{ role: "user", content: "hi" }], {
+      thinking: { type: "enabled" },
+      reasoningEffort: "high",
     });
-    expect(unknown.capabilities.contextWindow).toBe(128_000); // default
+
+    const callArgs = mockCreate.mock.calls[0][0];
+    expect(callArgs.extra_body.thinking).toEqual({ type: "enabled" });
+    expect(callArgs.extra_body.reasoning_effort).toBe("high");
+  });
+
+  it("does not add extra_body when no thinking options are set", async () => {
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { role: "assistant", content: "OK" }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 5, completion_tokens: 2 },
+    });
+
+    const adapter = new OpenAICompatAdapter({ provider: "abab", apiKey: "sk-test", model: "abab-7" });
+    await adapter.chat([{ role: "user", content: "hi" }]);
+
+    const callArgs = mockCreate.mock.calls[0][0];
+    expect(callArgs.extra_body).toBeUndefined();
   });
 
   describe("streaming with reasoning", () => {
@@ -149,7 +151,7 @@ describe("OpenAICompatAdapter", () => {
 
       mockCreate.mockResolvedValue(mockStream());
 
-      const adapter = new OpenAICompatAdapter({ provider: "kimi", apiKey: "sk-test", model: "kimi-k2.6" });
+      const adapter = new OpenAICompatAdapter({ provider: "custom", apiKey: "sk-test" });
       const events = [];
       for await (const chunk of adapter.stream([{ role: "user", content: "think" }])) {
         events.push(chunk);
@@ -171,7 +173,7 @@ describe("OpenAICompatAdapter", () => {
 
       mockCreate.mockResolvedValue(mockStream());
 
-      const adapter = new OpenAICompatAdapter({ provider: "openai", apiKey: "sk-test" });
+      const adapter = new OpenAICompatAdapter({ provider: "custom", apiKey: "sk-test" });
       const events = [];
       for await (const chunk of adapter.stream([{ role: "user", content: "Hi" }])) {
         events.push(chunk);
@@ -179,47 +181,6 @@ describe("OpenAICompatAdapter", () => {
 
       const reasoning = events.filter((e) => e.type === "reasoning-delta");
       expect(reasoning).toHaveLength(0);
-    });
-  });
-
-  describe("thinking defaults", () => {
-    it("enables thinking for kimi-k2.5 by default", async () => {
-      mockCreate.mockResolvedValue({
-        choices: [{ message: { role: "assistant", content: "OK" }, finish_reason: "stop" }],
-        usage: { prompt_tokens: 5, completion_tokens: 2 },
-      });
-
-      const adapter = new OpenAICompatAdapter({ provider: "kimi", apiKey: "sk-test", model: "kimi-k2.5" });
-      await adapter.chat([{ role: "user", content: "hi" }]);
-
-      const callArgs = mockCreate.mock.calls[0][0];
-      expect(callArgs.extra_body.thinking).toEqual({ type: "enabled" });
-    });
-
-    it("enables thinking with keep:all for kimi-k2.6 by default", async () => {
-      mockCreate.mockResolvedValue({
-        choices: [{ message: { role: "assistant", content: "OK" }, finish_reason: "stop" }],
-        usage: { prompt_tokens: 5, completion_tokens: 2 },
-      });
-
-      const adapter = new OpenAICompatAdapter({ provider: "kimi", apiKey: "sk-test", model: "kimi-k2.6" });
-      await adapter.chat([{ role: "user", content: "hi" }]);
-
-      const callArgs = mockCreate.mock.calls[0][0];
-      expect(callArgs.extra_body.thinking).toEqual({ type: "enabled", keep: "all" });
-    });
-
-    it("does not add thinking defaults for abab-7 model", async () => {
-      mockCreate.mockResolvedValue({
-        choices: [{ message: { role: "assistant", content: "OK" }, finish_reason: "stop" }],
-        usage: { prompt_tokens: 5, completion_tokens: 2 },
-      });
-
-      const adapter = new OpenAICompatAdapter({ provider: "abab", apiKey: "sk-test", model: "abab-7" });
-      await adapter.chat([{ role: "user", content: "hi" }]);
-
-      const callArgs = mockCreate.mock.calls[0][0];
-      expect(callArgs.extra_body).toBeUndefined();
     });
   });
 });

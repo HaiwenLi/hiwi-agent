@@ -81,6 +81,8 @@ export async function runPipeMode(deps: PipeRunnerDeps): Promise<void> {
         if (event.type === "text-delta" && event.text) {
           output += event.text;
           process.stdout.write(event.text);
+        } else if (event.type === "reasoning-delta" && event.text) {
+          // Reasoning/thinking content — available but not displayed in pipe mode
         } else if (event.type === "tool-call") {
           process.stdout.write(`\n[Calling: ${event.toolName}]\n`);
         } else if (event.type === "tool-result" && event.toolResult) {
@@ -95,7 +97,7 @@ export async function runPipeMode(deps: PipeRunnerDeps): Promise<void> {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       printOutput(`\n[Error: ${msg}]`);
-      printOutput("\n[Stack]: " + (err instanceof Error ? err.stack : "").split("\n").slice(0, 5).join("\n"));
+      printOutput("\n[Stack]: " + (err instanceof Error ? err.stack ?? "" : "").split("\n").slice(0, 5).join("\n"));
     }
 
     if (output) {

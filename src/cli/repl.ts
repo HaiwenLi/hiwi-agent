@@ -29,6 +29,7 @@ export interface REPLDependencies {
   onEndThinking?: () => void;
   confirm?: (message: string) => Promise<boolean>;
   onStatusBarUpdate?: (data: import("../types.js").TokenUsage) => void;
+  requestModeSwitch?: (mode: string) => void;
 }
 
 export class REPL {
@@ -353,7 +354,7 @@ export class REPL {
   }
 
   private extractToolNameFromResult(content: string): string | null {
-    const match = content.match(/Permission denied for tool: (\w+)/);
+    const match = content.match(/Permission denied for tool: ([\w.-]+)/);
     return match ? match[1] : null;
   }
 
@@ -369,6 +370,7 @@ export class REPL {
       confirm: this.deps.confirm,
       thinkingEffort: this.thinkingEffort,
       setThinkingEffort: (effort: string) => this.setThinkingEffort(effort),
+      requestModeSwitch: this.deps.requestModeSwitch,
     };
   }
 

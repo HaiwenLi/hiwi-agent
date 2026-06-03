@@ -5,6 +5,7 @@ export { loadConfig, resolveConfig, resolveApiKey } from "./core/config.js";
 
 // Adapters
 export { AnthropicAdapter } from "./adapters/anthropic.js";
+export { KimiAdapter } from "./adapters/kimi.js";
 export { OpenAICompatAdapter } from "./adapters/openai-compat.js";
 export { OllamaAdapter } from "./adapters/ollama.js";
 export { ProviderRegistry } from "./adapters/registry.js";

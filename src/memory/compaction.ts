@@ -104,7 +104,10 @@ export class ContextCompactor {
       return { messages: processed, compacted: true };
     }
 
-    const olderText = older.map((m) => `[${m.role}]: ${m.content}`).join("\n\n");
+    const olderText = older.map((m) => {
+      const text = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+      return `[${m.role}]: ${text}`;
+    }).join("\n\n");
 
     const summarizeInput = options.existingSummary
       ? `Previous summary:\n${options.existingSummary}\n\nNew conversation to incorporate:\n${olderText}`

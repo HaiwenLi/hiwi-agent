@@ -1,6 +1,7 @@
 import type { ModelEntry, ProviderConfig } from "../types.js";
 import { ANTHROPIC_MODELS } from "./anthropic.js";
 import { DEEPSEEK_MODELS } from "./deepseek.js";
+import { KIMI_MODELS } from "./kimi.js";
 import { MINIMAX_MODELS } from "./minimax.js";
 import { OLLAMA_MODELS } from "./ollama.js";
 import { OPENAI_COMPAT_MODELS } from "./openai-compat.js";
@@ -15,6 +16,7 @@ const STATIC_DEFAULTS: ProviderModelCatalog = {
   deepseek: Object.keys(DEEPSEEK_MODELS).map((id) => ({ id })),
   openai: Object.keys(OPENAI_MODELS).map((id) => ({ id })),
   anthropic: Object.keys(ANTHROPIC_MODELS).map((id) => ({ id })),
+  kimi: Object.keys(KIMI_MODELS).map((id) => ({ id })),
   minimax: Object.keys(MINIMAX_MODELS).map((id) => ({ id })),
   zhipu: Object.keys(ZHIPU_MODELS).map((id) => ({ id })),
   ollama: Object.keys(OLLAMA_MODELS).map((id) => ({ id })),

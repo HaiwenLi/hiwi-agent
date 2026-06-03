@@ -8,6 +8,7 @@ import type {
 } from "../types.js";
 import { AnthropicAdapter, ANTHROPIC_MODELS } from "./anthropic.js";
 import { DeepSeekAdapter, DEEPSEEK_MODELS } from "./deepseek.js";
+import { KimiAdapter, KIMI_MODELS } from "./kimi.js";
 import { MiniMaxAdapter, MINIMAX_MODELS } from "./minimax.js";
 import { type ProviderModelCatalog, buildCatalog } from "./model-catalog.js";
 import { OllamaAdapter, OLLAMA_MODELS } from "./ollama.js";
@@ -19,6 +20,7 @@ const ALL_CAPABILITIES: Record<string, ModelCapabilities> = {
   ...DEEPSEEK_MODELS,
   ...OPENAI_MODELS,
   ...ANTHROPIC_MODELS,
+  ...KIMI_MODELS,
   ...MINIMAX_MODELS,
   ...OLLAMA_MODELS,
   ...OPENAI_COMPAT_MODELS,
@@ -64,9 +66,9 @@ export class ProviderRegistry {
 
   setModel(modelId: string): void {
     this.activeModel = modelId;
-    for (const adapter of this.adapters.values()) {
-      adapter.setModel?.(modelId);
-    }
+    // Only update the active adapter, not all registered adapters
+    const active = this.adapters.get(this.activeProvider);
+    active?.setModel?.(modelId);
   }
 
   updateProviderConfig(providerName: string, config: ProviderConfig): void {
@@ -158,6 +160,10 @@ export class ProviderRegistry {
 
       case "ollama":
         return new OllamaAdapter({ baseUrl, model: this.activeModel });
+
+      case "kimi":
+        if (!apiKey) throw new Error(`No API key for provider: ${providerName}`);
+        return new KimiAdapter({ apiKey, baseUrl, model: this.activeModel });
 
       case "zhipu":
         if (!apiKey) throw new Error(`No API key for provider: ${providerName}`);

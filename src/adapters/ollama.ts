@@ -185,7 +185,14 @@ export class OllamaAdapter implements ModelAdapter {
                 }
                 if (tc.function.name) entry.name = tc.function.name;
                 if (tc.function.arguments) {
-                  entry.arguments += JSON.stringify(tc.function.arguments);
+                  // Ollama sends arguments as already-parsed objects, not strings.
+                  // Merge objects rather than concatenating JSON strings.
+                  if (entry.arguments) {
+                    const merged = { ...JSON.parse(entry.arguments), ...tc.function.arguments };
+                    entry.arguments = JSON.stringify(merged);
+                  } else {
+                    entry.arguments = JSON.stringify(tc.function.arguments);
+                  }
                 }
               }
               hasToolCalls = true;
@@ -193,13 +200,14 @@ export class OllamaAdapter implements ModelAdapter {
 
             if (chunk.done) {
               // Emit accumulated tool calls
+              let tcIndex = 0;
               for (const [, tc] of toolCallMap) {
                 yield {
                   type: "tool-call",
                   toolCall: {
-                    id: `ollama-tc-${toolCallMap.size}`,
+                    id: `ollama-tc-${tcIndex++}`,
                     name: tc.name,
-                    input: JSON.parse(tc.arguments || "{}"),
+                    input: (() => { try { return JSON.parse(tc.arguments || "{}"); } catch { return {}; } })(),
                   },
                 };
               }

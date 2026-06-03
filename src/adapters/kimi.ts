@@ -11,9 +11,13 @@ import type {
   ToolDefinition,
 } from "../types.js";
 
-export const OPENAI_COMPAT_MODELS: Record<string, ModelCapabilities> = {
-  "abab-7": { tools: true, vision: false, maxTokens: 8_192, contextWindow: 128_000 },
+export const KIMI_MODELS: Record<string, ModelCapabilities> = {
+  "kimi-k2.6": { tools: true, vision: true, maxTokens: 32_000, contextWindow: 262_144 },
+  "kimi-k2.5": { tools: true, vision: true, maxTokens: 32_000, contextWindow: 262_144 },
+  "kimi-k2-thinking": { tools: true, vision: false, maxTokens: 32_000, contextWindow: 262_144 },
 };
+
+const DEFAULT_MODEL = "kimi-k2.6";
 
 const DEFAULT_CAPABILITIES: ModelCapabilities = {
   tools: true,
@@ -44,23 +48,12 @@ function endsWithPartialTag(buffer: string, tag: string): boolean {
 function buildUsage(raw: {
   prompt_tokens?: number;
   completion_tokens?: number;
-  prompt_cache_hit_tokens?: number;
-  prompt_cache_miss_tokens?: number;
   cached_tokens?: number;
 }): TokenUsage {
-  const inputTokens = raw.prompt_tokens ?? 0;
-  const outputTokens = raw.completion_tokens ?? 0;
-  // DeepSeek cache format
-  const cacheHit = raw.prompt_cache_hit_tokens;
-  const cacheMiss = raw.prompt_cache_miss_tokens;
-  // Kimi cache format
-  const cached = raw.cached_tokens;
-
   return {
-    inputTokens,
-    outputTokens,
-    cacheReadTokens: cacheHit ?? cached,
-    cacheWriteTokens: cacheMiss,
+    inputTokens: raw.prompt_tokens ?? 0,
+    outputTokens: raw.completion_tokens ?? 0,
+    cacheReadTokens: raw.cached_tokens,
   };
 }
 
@@ -68,46 +61,49 @@ function enrichUsage(
   usage: TokenUsage,
   contextWindow: number,
   modelName: string,
-  provider: string,
   thinkingEffort?: string,
 ): TokenUsage {
   return {
     ...usage,
     contextWindow,
-    contextPercent:
-      contextWindow > 0 ? Math.round((usage.inputTokens / contextWindow) * 100) : null,
+    contextPercent: contextWindow > 0 ? Math.round((usage.inputTokens / contextWindow) * 100) : null,
     modelName,
-    provider,
+    provider: "kimi",
     thinkingEffort,
   };
 }
 
-export class OpenAICompatAdapter implements ModelAdapter {
+export class KimiAdapter implements ModelAdapter {
   id: string;
-  readonly provider: string;
+  readonly provider = "kimi";
   capabilities: ModelCapabilities;
   private client: OpenAI;
   private lastUsage: TokenUsage | undefined;
 
-  constructor(options: {
-    provider: string;
-    apiKey?: string;
-    baseUrl?: string;
-    model?: string;
-  }) {
-    this.id = options.model ?? "gpt-4o";
-    this.provider = options.provider;
-    this.capabilities = OPENAI_COMPAT_MODELS[this.id] ?? DEFAULT_CAPABILITIES;
-    if (!options.apiKey) throw new Error(`No API key configured for provider ${options.provider}. Set the corresponding env var or add apiKey to config.`);
+  constructor(options: { apiKey?: string; baseUrl?: string; model?: string }) {
+    this.id = options.model ?? DEFAULT_MODEL;
+    this.capabilities = KIMI_MODELS[this.id] ?? DEFAULT_CAPABILITIES;
+    if (!options.apiKey) throw new Error("No API key configured for Kimi provider. Set KIMI_API_KEY or add apiKey to config.");
     this.client = new OpenAI({
       apiKey: options.apiKey,
-      baseURL: options.baseUrl,
+      baseURL: options.baseUrl ?? "https://api.moonshot.cn/v1",
     });
   }
 
   setModel(modelId: string): void {
     this.id = modelId;
-    this.capabilities = OPENAI_COMPAT_MODELS[modelId] ?? DEFAULT_CAPABILITIES;
+    this.capabilities = KIMI_MODELS[modelId] ?? DEFAULT_CAPABILITIES;
+  }
+
+  private isKimiK26(): boolean {
+    return this.id === "kimi-k2.6";
+  }
+
+  private getThinkingDefault(): Record<string, unknown> {
+    if (this.isKimiK26()) {
+      return { type: "enabled", keep: "all" };
+    }
+    return { type: "enabled" };
   }
 
   async chat(messages: Message[], options?: ChatOptions, signal?: AbortSignal): Promise<ChatResponse> {
@@ -119,14 +115,14 @@ export class OpenAICompatAdapter implements ModelAdapter {
       tools: options?.tools ? this.convertTools(options.tools) : undefined,
     };
 
-    if (options?.thinking || options?.reasoningEffort) {
-      params.extra_body = {};
-      if (options?.thinking) {
-        (params.extra_body as Record<string, unknown>).thinking = options.thinking;
-      }
-      if (options?.reasoningEffort) {
-        (params.extra_body as Record<string, unknown>).reasoning_effort = options.reasoningEffort;
-      }
+    params.extra_body = {};
+    if (options?.thinking) {
+      (params.extra_body as Record<string, unknown>).thinking = options.thinking;
+    } else {
+      (params.extra_body as Record<string, unknown>).thinking = this.getThinkingDefault();
+    }
+    if (options?.reasoningEffort) {
+      (params.extra_body as Record<string, unknown>).reasoning_effort = options.reasoningEffort;
     }
 
     if (options?.responseFormat) {
@@ -150,10 +146,6 @@ export class OpenAICompatAdapter implements ModelAdapter {
     const thinkContent = strippedContent.thinkContent;
     content = strippedContent.cleanContent;
 
-    // If content was wrapped in  tags (e.g. DeepSeek R1 style without reasoning_content),
-    // yield the think content as reasoning for the UI to render specially
-    // The final content stored should be the clean content without  tags
-
     const mergedReasoningContent = [reasoningContent, thinkContent].filter(Boolean).join("\n");
 
     return {
@@ -169,7 +161,6 @@ export class OpenAICompatAdapter implements ModelAdapter {
         buildUsage(response.usage ?? {}),
         this.capabilities.contextWindow,
         response.model,
-        this.provider,
         options?.reasoningEffort,
       ),
     };
@@ -185,14 +176,14 @@ export class OpenAICompatAdapter implements ModelAdapter {
       stream: true,
     };
 
-    if (options?.thinking || options?.reasoningEffort) {
-      params.extra_body = {};
-      if (options?.thinking) {
-        (params.extra_body as Record<string, unknown>).thinking = options.thinking;
-      }
-      if (options?.reasoningEffort) {
-        (params.extra_body as Record<string, unknown>).reasoning_effort = options.reasoningEffort;
-      }
+    params.extra_body = {};
+    if (options?.thinking) {
+      (params.extra_body as Record<string, unknown>).thinking = options.thinking;
+    } else {
+      (params.extra_body as Record<string, unknown>).thinking = this.getThinkingDefault();
+    }
+    if (options?.reasoningEffort) {
+      (params.extra_body as Record<string, unknown>).reasoning_effort = options.reasoningEffort;
     }
 
     if (options?.responseFormat) {
@@ -207,7 +198,6 @@ export class OpenAICompatAdapter implements ModelAdapter {
       { signal },
     );
 
-    // Accumulate streaming tool call fragments
     const toolCallMap = new Map<number, { id: string; name: string; arguments: string }>();
     let modelName = this.id;
     let finishReason = "stop";
@@ -256,7 +246,6 @@ export class OpenAICompatAdapter implements ModelAdapter {
       if (delta?.tool_calls) {
         for (let ti = 0; ti < (delta.tool_calls as unknown[]).length; ti++) {
           const tc = (delta.tool_calls as unknown[])[ti] as Record<string, unknown>;
-          // Use server-provided index if available, otherwise fall back to array position
           const idx = typeof tc.index === "number" ? tc.index : ti;
           let entry = toolCallMap.get(idx);
           if (!entry) {
@@ -288,7 +277,6 @@ export class OpenAICompatAdapter implements ModelAdapter {
       yield { type: thinkMode ? "reasoning-delta" : "text-delta", text: thinkBuffer };
     }
 
-    // Emit accumulated tool calls
     for (const [, tc] of toolCallMap) {
       yield {
         type: "tool-call",
@@ -304,7 +292,6 @@ export class OpenAICompatAdapter implements ModelAdapter {
       buildUsage({ prompt_tokens: inputTokens, completion_tokens: outputTokens }),
       this.capabilities.contextWindow,
       modelName,
-      this.provider,
       options?.reasoningEffort,
     );
     this.lastUsage = usage;

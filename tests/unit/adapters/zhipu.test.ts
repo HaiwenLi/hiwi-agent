@@ -9,7 +9,7 @@ describe("ZhipuAdapter", () => {
   beforeEach(() => {
     adapter = new ZhipuAdapter({
       apiKey: "test-key",
-      model: "glm-4-flash",
+      model: "glm-4.7-flash",
     });
     fetchSpy = vi.spyOn(globalThis, "fetch");
   });
@@ -19,11 +19,11 @@ describe("ZhipuAdapter", () => {
   });
 
   it("has correct id and provider", () => {
-    expect(adapter.id).toBe("glm-4-flash");
+    expect(adapter.id).toBe("glm-4.7-flash");
     expect(adapter.provider).toBe("zhipu");
   });
 
-  it("reports correct capabilities for glm-4-flash", () => {
+  it("reports correct capabilities for glm-4.7-flash", () => {
     expect(adapter.capabilities.tools).toBe(true);
     expect(adapter.capabilities.vision).toBe(false);
     expect(adapter.capabilities.contextWindow).toBe(200_000);

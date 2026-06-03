@@ -169,7 +169,8 @@ export class AgentLoop {
         chatOptions.reasoningEffort = this.config.thinkingEffort;
       }
 
-      if (this.config.streaming) {
+      const forceStreaming = ["deepseek", "kimi", "minimax", "zhipu"].includes(this.adapter.provider);
+      if (this.config.streaming || forceStreaming) {
         try {
           for await (const chunk of this.adapter.stream(currentMessages, chatOptions, this.abortController.signal)) {
             if (chunk.type === "text-delta") {
@@ -239,7 +240,7 @@ export class AgentLoop {
       // Check if we should stop or continue with tool execution
       // Only stop early if there's no content AND no tool calls
       if (finishReason !== "tool-calls" && toolCalls.length === 0) {
-        if (!content && toolCalls.length === 0) {
+        if (!content && !reasoningContent && toolCalls.length === 0) {
           emptyResponseCount++;
           if (emptyResponseCount <= 1) {
             currentMessages.push(

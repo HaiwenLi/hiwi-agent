@@ -1,4 +1,4 @@
-import type { MarkdownTheme } from "./markdown.js";
+import type { MarkdownTheme } from "./components/markdown.js";
 
 const bold = (t: string) => `\x1b[1m${t}\x1b[22m`;
 const italic = (t: string) => `\x1b[3m${t}\x1b[23m`;

@@ -71,6 +71,7 @@ export interface ChatOptions {
   tools?: ToolDefinition[];
   thinking?: { type: string; [key: string]: unknown };
   reasoningEffort?: string;
+  top_p?: number;
   responseFormat?: {
     type: "text" | "json_object" | "json_schema";
     json_schema?: { name: string; strict: boolean; schema: Record<string, unknown> };

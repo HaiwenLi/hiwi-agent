@@ -13,7 +13,7 @@ import { SkillExecutor } from "../skills/executor.js";
 import { SkillLoader } from "../skills/loader.js";
 import { SkillRegistry } from "../skills/registry.js";
 import type { PermissionMode } from "../types.js";
-import { createApp } from "./app.js";
+import { createApp, type PickerItem } from "./app.js";
 import { CommandRegistry } from "./commands.js";
 import { runPipeMode } from "./pipe.js";
 import { REPL } from "./repl.js";
@@ -102,11 +102,14 @@ export async function main(options: CLIOptions = {}): Promise<void> {
   await fileStore.init();
   const mem0Provider = config.providers.mem0;
   const mem0 = new Mem0Client();
-  await mem0.init({
-    apiKey: mem0Provider?.apiKey,
-    host: mem0Provider?.baseUrl,
-    oss: mem0Provider?.oss as unknown as Mem0OSSConfig | undefined,
-  });
+  // Only initialize mem0 if configured — avoids unnecessary import/lag
+  if (mem0Provider?.apiKey || mem0Provider?.oss) {
+    await mem0.init({
+      apiKey: mem0Provider.apiKey,
+      host: mem0Provider.baseUrl,
+      oss: mem0Provider.oss as unknown as Mem0OSSConfig | undefined,
+    });
+  }
   const memoryManager = new MemoryManager(fileStore, mem0);
 
   const sessionDir = path.join(projectDir, ".agent");
@@ -187,6 +190,24 @@ export async function main(options: CLIOptions = {}): Promise<void> {
     onEndThinking: () => app.endThinking(),
     onStatusBarUpdate: (data) => {
       app.setStatusBarData(data);
+    },
+    requestModeSwitch: (mode: string) => {
+      if (mode === "model-picker") {
+        const models = providerRegistry.listModels();
+        const items: PickerItem[] = models.map((m) => ({
+          label: m.id,
+          detail: m.provider,
+          value: `/model ${m.id}`,
+        }));
+        app.showPicker(items);
+      } else if (mode === "provider-picker") {
+        const catalog = providerRegistry.getModelCatalog();
+        const items: PickerItem[] = Object.keys(catalog).map((p) => ({
+          label: p,
+          value: `/provider ${p}`,
+        }));
+        app.showPicker(items);
+      }
     },
   });
 

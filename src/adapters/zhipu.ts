@@ -21,7 +21,6 @@ export const ZHIPU_MODELS: Record<string, ModelCapabilities> = {
   "glm-4.5-air": { tools: true, vision: false, maxTokens: 96_000, contextWindow: 128_000 },
   "glm-4.5-airx": { tools: true, vision: false, maxTokens: 96_000, contextWindow: 128_000 },
   "glm-4.7-flash": { tools: true, vision: false, maxTokens: 128_000, contextWindow: 200_000 },
-  "glm-4-flash": { tools: true, vision: false, maxTokens: 4_096, contextWindow: 200_000 },
 };
 
 const DEFAULT_MODEL = "glm-5.1";
@@ -59,7 +58,8 @@ export class ZhipuAdapter implements ModelAdapter {
       model: options?.model ?? this.id,
       messages: this.convertMessages(messages),
       max_tokens: options?.maxTokens ?? this.capabilities.maxTokens,
-      temperature: options?.temperature ?? 0.7,
+      temperature: options?.temperature ?? 1.0,
+      top_p: options?.top_p ?? 0.95,
     };
     if (options?.tools?.length) {
       body.tools = this.convertTools(options.tools);
@@ -135,7 +135,7 @@ export class ZhipuAdapter implements ModelAdapter {
     const toolCalls: ToolCall[] = (choice?.message?.tool_calls ?? []).map((tc) => ({
       id: tc.id,
       name: tc.function.name,
-      input: JSON.parse(tc.function.arguments),
+      input: (() => { try { return JSON.parse(tc.function.arguments); } catch { return {}; } })(),
     }));
 
     const inputTk = data.usage?.prompt_tokens ?? 0;
@@ -168,12 +168,14 @@ export class ZhipuAdapter implements ModelAdapter {
       model: options?.model ?? this.id,
       messages: this.convertMessages(messages),
       max_tokens: options?.maxTokens ?? this.capabilities.maxTokens,
-      temperature: options?.temperature ?? 0.7,
+      temperature: options?.temperature ?? 1.0,
+      top_p: options?.top_p ?? 0.95,
       stream: true,
       stream_options: { include_usage: true },
     };
     if (options?.tools?.length) {
       body.tools = this.convertTools(options.tools);
+      body.tool_stream = true;
     }
     if (options?.responseFormat) {
       body.response_format = options.responseFormat;
@@ -319,7 +321,7 @@ export class ZhipuAdapter implements ModelAdapter {
         toolCall: {
           id: tc.id,
           name: tc.name,
-          input: JSON.parse(tc.arguments || "{}"),
+          input: (() => { try { return JSON.parse(tc.arguments || "{}"); } catch { return {}; } })(),
         },
       };
     }
@@ -345,13 +347,21 @@ export class ZhipuAdapter implements ModelAdapter {
     };
   }
 
+  private extractText(content: string | ContentPart[]): string {
+    if (typeof content === "string") return content;
+    return content
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map((p) => p.text)
+      .join("\n");
+  }
+
   private convertMessages(messages: Message[]): Array<Record<string, unknown>> {
     return messages.map((msg) => {
       switch (msg.role) {
         case "system":
-          return { role: "system", content: msg.content };
+          return { role: "system", content: this.extractText(msg.content) };
         case "user":
-          return { role: "user", content: msg.content };
+          return { role: "user", content: this.extractText(msg.content) };
         case "assistant": {
           const result: Record<string, unknown> = {
             role: "assistant",
@@ -375,7 +385,7 @@ export class ZhipuAdapter implements ModelAdapter {
         case "tool":
           return {
             role: "tool",
-            content: msg.content,
+            content: this.extractText(msg.content),
             tool_call_id: msg.toolCallId ?? "",
           };
       }

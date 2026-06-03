@@ -133,7 +133,7 @@ export class DeepSeekAdapter implements ModelAdapter {
       toolCalls: tc.map((t) => ({
         id: t.id,
         name: t.function.name,
-        input: JSON.parse(t.function.arguments),
+        input: (() => { try { return JSON.parse(t.function.arguments); } catch { return {}; } })(),
       })),
       finishReason: choice.finish_reason === "tool_calls" ? "tool-calls" : "stop",
       usage: enrichUsage(
@@ -256,7 +256,7 @@ export class DeepSeekAdapter implements ModelAdapter {
         toolCall: {
           id: tc.id,
           name: tc.name,
-          input: JSON.parse(tc.arguments || "{}"),
+          input: (() => { try { return JSON.parse(tc.arguments || "{}"); } catch { return {}; } })(),
         },
       };
     }
@@ -319,7 +319,7 @@ export class DeepSeekAdapter implements ModelAdapter {
         case "tool":
           return {
             role: "tool",
-            content: typeof msg.content === "string" ? msg.content : "",
+            content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
             tool_call_id: msg.toolCallId ?? "",
           };
       }
