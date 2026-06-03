@@ -6,6 +6,7 @@ import type {
   ModelAdapter,
   ModelCapabilities,
   StreamChunk,
+  TokenUsage,
   ToolCall,
   ToolDefinition,
 } from "../types.js";
