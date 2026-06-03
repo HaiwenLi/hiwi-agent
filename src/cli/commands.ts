@@ -16,6 +16,7 @@ export interface CommandContext {
   confirm?: (message: string) => Promise<boolean>;
   thinkingEffort?: string;
   setThinkingEffort?: (effort: string) => void;
+  requestModeSwitch?: (mode: string) => void;
 }
 
 export interface Command {
@@ -66,6 +67,10 @@ export class CommandRegistry {
       description: "Set active model (usage: /model <id>)",
       handler: async (args, ctx) => {
         if (!args) {
+          if (ctx.requestModeSwitch) {
+            await Promise.resolve(ctx.requestModeSwitch("model-picker"));
+            return "";
+          }
           const models = ctx.providerRegistry.listModels();
           if (models.length === 0) return "No models registered. Use: /model <id>";
           return models.map((m) => `  ${m.id} (${m.provider})`).join("\n");
@@ -80,6 +85,10 @@ export class CommandRegistry {
       description: "Set active provider (usage: /provider <name>)",
       handler: async (args, ctx) => {
         if (!args) {
+          if (ctx.requestModeSwitch) {
+            await Promise.resolve(ctx.requestModeSwitch("provider-picker"));
+            return "";
+          }
           return "Usage: /provider <name>";
         }
         ctx.providerRegistry.setProvider(args);
@@ -148,12 +157,20 @@ export class CommandRegistry {
 
     this.register({
       name: "sessions",
-      description: "List sessions",
-      handler: async (_args, ctx) => {
+      description: "List/delete sessions: /sessions [delete <id>]",
+      handler: async (args, ctx) => {
+        if (args.startsWith("delete")) {
+          const id = args.slice("delete".length).trim();
+          if (!id) return "Usage: /sessions delete <session-id>";
+          const deleted = ctx.sessionStore.deleteSession(id);
+          return deleted
+            ? `Session ${id.slice(0, 8)}... deleted.`
+            : `Session not found: ${id}`;
+        }
         const sessions = ctx.sessionStore.listSessions();
         if (sessions.length === 0) return "No sessions.";
         return sessions
-          .map((s) => `  ${s.id.slice(0, 8)}... ${s.status} ${s.workingDir}`)
+          .map((s, i) => `  ${i + 1}. ${s.id.slice(0, 8)}  ${s.status.padEnd(10)} ${s.workingDir}`)
           .join("\n");
       },
     });

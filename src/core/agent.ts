@@ -4,6 +4,7 @@ import type { MemoryFileStore } from "../memory/file-store.js";
 import type {
   AgentLoopConfig,
   AgentLoopEvent,
+  ChatOptions,
   Message,
   ModelAdapter,
   PermissionMode,
@@ -93,6 +94,8 @@ function shouldParallelize(calls: ToolCallInfo[], registry: ToolRegistry): Execu
 
 export class AgentLoop {
   private interrupted = false;
+  private _paused = false;
+  private abortController = new AbortController();
   private autoExtractor?: AutoExtractor;
 
   constructor(
@@ -109,8 +112,18 @@ export class AgentLoop {
     }
   }
 
+  get paused(): boolean {
+    return this._paused;
+  }
+
   interrupt(): void {
     this.interrupted = true;
+  }
+
+  pause(): void {
+    this._paused = true;
+    this.interrupted = true;
+    this.abortController.abort();
   }
 
   async *run(messages: Message[]): AsyncGenerator<AgentLoopEvent> {
@@ -126,50 +139,78 @@ export class AgentLoop {
       modelId: this.adapter.id,
       workingDirectory: ctx.workingDirectory,
     });
-    currentMessages.unshift({ role: "system", content: systemPrompt });
+    // Replace existing system prompt if present, otherwise prepend
+    if (currentMessages[0]?.role === "system") {
+      currentMessages[0] = { role: "system", content: systemPrompt };
+    } else {
+      currentMessages.unshift({ role: "system", content: systemPrompt });
+    }
 
     let iteration = 0;
     let emptyResponseCount = 0;
 
     while (iteration < this.config.maxLoops && !budget.exhausted && !this.interrupted) {
+      if (this._paused) break;
+
       yield { type: "step-start", iteration };
 
       let content = "";
       const toolCalls: ToolCall[] = [];
       let finishReason = "stop";
       let usage: TokenUsage | undefined;
+      let reasoningContent = "";
 
-      const chatOptions = {
+      const chatOptions: ChatOptions = {
         tools: this.toolRegistry.toToolDefinitions(),
       };
 
+      if (this.config.thinkingEffort) {
+        chatOptions.thinking = { type: "enabled" };
+        chatOptions.reasoningEffort = this.config.thinkingEffort;
+      }
+
       if (this.config.streaming) {
-        for await (const chunk of this.adapter.stream(currentMessages, chatOptions)) {
-          if (chunk.type === "text-delta") {
-            content += chunk.text;
-            yield { type: "text-delta", text: chunk.text, iteration };
-          } else if (chunk.type === "reasoning-delta") {
-            yield { type: "reasoning-delta", text: chunk.text, iteration };
-          } else if (chunk.type === "tool-call") {
-            toolCalls.push(chunk.toolCall);
-            yield {
-              type: "tool-call",
-              toolName: chunk.toolCall.name,
-              toolCallId: chunk.toolCall.id,
-              toolInput: chunk.toolCall.input,
-              iteration,
-            };
-          } else if (chunk.type === "finish") {
-            finishReason = chunk.finishReason;
-            usage = chunk.usage;
+        try {
+          for await (const chunk of this.adapter.stream(currentMessages, chatOptions, this.abortController.signal)) {
+            if (chunk.type === "text-delta") {
+              content += chunk.text;
+              yield { type: "text-delta", text: chunk.text, iteration };
+            } else if (chunk.type === "reasoning-delta") {
+              reasoningContent += chunk.text;
+              yield { type: "reasoning-delta", text: chunk.text, iteration };
+            } else if (chunk.type === "tool-call") {
+              toolCalls.push(chunk.toolCall);
+              yield {
+                type: "tool-call",
+                toolName: chunk.toolCall.name,
+                toolCallId: chunk.toolCall.id,
+                toolInput: chunk.toolCall.input,
+                iteration,
+              };
+            } else if (chunk.type === "finish") {
+              finishReason = chunk.finishReason;
+              usage = chunk.usage;
+            }
+
+            if (this._paused) break;
+          }
+        } catch (err) {
+          if (err instanceof Error && err.name === "AbortError") {
+            this._paused = true;
+          } else {
+            throw err;
           }
         }
       } else {
-        const response = await this.adapter.chat(currentMessages, chatOptions);
+        const response = await this.adapter.chat(currentMessages, chatOptions, this.abortController.signal);
         content = response.content;
+        reasoningContent = response.reasoningContent ?? "";
         toolCalls.push(...response.toolCalls);
         finishReason = response.finishReason;
         usage = response.usage;
+        if (reasoningContent) {
+          yield { type: "reasoning-delta", text: reasoningContent, iteration };
+        }
         if (content) {
           yield { type: "text-delta", text: content, iteration };
         }
@@ -182,6 +223,17 @@ export class AgentLoop {
             iteration,
           };
         }
+      }
+
+      // If paused mid-stream, save partial state and exit
+      if (this._paused) {
+        if (content) {
+          currentMessages.push({ role: "assistant", content, reasoningContent });
+        }
+        yield { type: "step-finish", iteration };
+        yield { type: "finish", finishReason: "paused", usage };
+        yield { type: "messages", messages: currentMessages };
+        return;
       }
 
       // Check if we should stop or continue with tool execution
@@ -203,9 +255,15 @@ export class AgentLoop {
           }
         }
 
+        currentMessages.push({
+          role: "assistant",
+          content,
+          reasoningContent,
+        });
+
         if (this.autoExtractor && content) {
           this.autoExtractor
-            .extract(messages)
+            .extract(currentMessages)
             .then((facts) => {
               if (facts.length > 0) this.autoExtractor?.storeFacts(facts);
             })
@@ -218,6 +276,7 @@ export class AgentLoop {
           usage,
         };
         yield { type: "step-finish", iteration };
+        yield { type: "messages", messages: currentMessages };
         return;
       }
 
@@ -226,6 +285,7 @@ export class AgentLoop {
         role: "assistant",
         content,
         toolCalls,
+        reasoningContent,
       });
 
       const execMode = shouldParallelize(toolCalls, this.toolRegistry);
@@ -251,9 +311,16 @@ export class AgentLoop {
 
         currentMessages.push({
           role: "tool",
-          content: result.content,
+          content: typeof result.content === "string" ? result.content : JSON.stringify(result.content),
           toolCallId: tc.id,
         });
+
+        if (result.contentParts?.length) {
+          currentMessages.push({
+            role: "user",
+            content: result.contentParts,
+          });
+        }
 
         budget.consume(tc.name);
       }
@@ -262,7 +329,9 @@ export class AgentLoop {
       iteration++;
     }
 
-    if (this.interrupted) {
+    if (this._paused) {
+      yield { type: "finish", finishReason: "paused" };
+    } else if (this.interrupted) {
       yield { type: "finish", finishReason: "interrupted" };
     } else {
       yield { type: "finish", finishReason: "max-loops" };

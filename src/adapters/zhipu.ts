@@ -1,34 +1,43 @@
 import type {
-  TokenUsage,
   ChatOptions,
   ChatResponse,
+  ContentPart,
   Message,
   ModelAdapter,
   ModelCapabilities,
   StreamChunk,
+  TokenUsage,
   ToolCall,
   ToolDefinition,
 } from "../types.js";
 
 export const ZHIPU_MODELS: Record<string, ModelCapabilities> = {
-  "glm-5": { tools: true, vision: true, maxTokens: 128_000, contextWindow: 200_000 },
   "glm-5.1": { tools: true, vision: true, maxTokens: 128_000, contextWindow: 200_000 },
-  "glm-turbo": { tools: true, vision: true, maxTokens: 128_000, contextWindow: 200_000 },
-  "glm-4-plus": { tools: true, vision: true, maxTokens: 4096, contextWindow: 200_000 },
-  "glm-4-flash": { tools: true, vision: false, maxTokens: 4096, contextWindow: 200_000 },
-  "glm-4": { tools: true, vision: true, maxTokens: 4096, contextWindow: 200_000 },
+  "glm-5": { tools: true, vision: true, maxTokens: 128_000, contextWindow: 200_000 },
+  "glm-5-turbo": { tools: true, vision: true, maxTokens: 128_000, contextWindow: 200_000 },
   "glm-4.7": { tools: true, vision: true, maxTokens: 128_000, contextWindow: 200_000 },
-  "glm-4v": { tools: false, vision: true, maxTokens: 4096, contextWindow: 200_000 },
-  "glm-3-turbo": { tools: true, vision: false, maxTokens: 4096, contextWindow: 200_000 },
+  "glm-4.7-flashx": { tools: true, vision: false, maxTokens: 128_000, contextWindow: 200_000 },
+  "glm-4.6": { tools: true, vision: false, maxTokens: 128_000, contextWindow: 200_000 },
+  "glm-4.5-air": { tools: true, vision: false, maxTokens: 96_000, contextWindow: 128_000 },
+  "glm-4.5-airx": { tools: true, vision: false, maxTokens: 96_000, contextWindow: 128_000 },
+  "glm-4.7-flash": { tools: true, vision: false, maxTokens: 128_000, contextWindow: 200_000 },
+  "glm-4-flash": { tools: true, vision: false, maxTokens: 4_096, contextWindow: 200_000 },
 };
 
-const DEFAULT_MODEL = "glm-5";
+const DEFAULT_MODEL = "glm-5.1";
 
 const GLM_ERROR_MAP: Record<string, string> = {
   "1301": "Content filtered by safety system. Rephrase your request.",
   "1215": "Invalid or expired API token. Check ZHIPU_API_KEY.",
   "1234": "Rate limited. Wait and retry.",
 };
+
+// GLM Coding Plan endpoint (for subscription-based coding tools)
+export const ZHIPU_CODING_BASE_URL = "https://open.bigmodel.cn/api/coding/paas/v4";
+// Regular pay-as-you-go API endpoint
+export const ZHIPU_PAAS_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
+// Anthropic-compatible endpoint (for Claude Code etc.)
+export const ZHIPU_ANTHROPIC_BASE_URL = "https://open.bigmodel.cn/api/anthropic";
 
 export class ZhipuAdapter implements ModelAdapter {
   readonly id: string;
@@ -40,12 +49,12 @@ export class ZhipuAdapter implements ModelAdapter {
 
   constructor(config: { apiKey: string; baseUrl?: string; model?: string }) {
     this.apiKey = config.apiKey;
-    this.baseUrl = config.baseUrl ?? "https://open.bigmodel.cn/api/paas/v4";
+    this.baseUrl = config.baseUrl ?? ZHIPU_PAAS_BASE_URL;
     this.id = config.model ?? DEFAULT_MODEL;
     this.capabilities = ZHIPU_MODELS[this.id] ?? ZHIPU_MODELS[DEFAULT_MODEL];
   }
 
-  async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+  async chat(messages: Message[], options?: ChatOptions, signal?: AbortSignal): Promise<ChatResponse> {
     const body: Record<string, unknown> = {
       model: options?.model ?? this.id,
       messages: this.convertMessages(messages),
@@ -55,6 +64,24 @@ export class ZhipuAdapter implements ModelAdapter {
     if (options?.tools?.length) {
       body.tools = this.convertTools(options.tools);
     }
+    if (options?.responseFormat) {
+      body.response_format = options.responseFormat;
+    }
+    if (options?.toolChoice) {
+      body.tool_choice = options.toolChoice;
+    }
+    if (options?.thinking) {
+      body.thinking = options.thinking;
+    } else if (
+      this.id.startsWith("glm-5") ||
+      this.id.startsWith("glm-4.7") ||
+      this.id.startsWith("glm-4.6")
+    ) {
+      body.thinking = { type: "enabled", clear_thinking: false };
+    }
+    if (options?.reasoningEffort) {
+      body.reasoning_effort = options.reasoningEffort;
+    }
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
@@ -63,6 +90,7 @@ export class ZhipuAdapter implements ModelAdapter {
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(body),
+      signal,
     });
 
     if (!response.ok) {
@@ -93,7 +121,14 @@ export class ZhipuAdapter implements ModelAdapter {
         };
         finish_reason: string;
       }>;
-      usage?: { prompt_tokens: number; completion_tokens: number };
+      model?: string;
+      usage?: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        prompt_tokens_details?: {
+          cached_tokens?: number;
+        };
+      };
     };
 
     const choice = data.choices[0];
@@ -103,18 +138,32 @@ export class ZhipuAdapter implements ModelAdapter {
       input: JSON.parse(tc.function.arguments),
     }));
 
+    const inputTk = data.usage?.prompt_tokens ?? 0;
+    const outputTk = data.usage?.completion_tokens ?? 0;
+    // GLM returns cached tokens in `usage.prompt_tokens_details.cached_tokens`
+    const cacheHit = data.usage?.prompt_tokens_details?.cached_tokens;
+
     return {
       content: choice?.message?.content ?? "",
       toolCalls,
       finishReason: choice?.finish_reason === "tool_calls" ? "tool-calls" : "stop",
       usage: {
-        inputTokens: data.usage?.prompt_tokens ?? 0,
-        outputTokens: data.usage?.completion_tokens ?? 0,
+        inputTokens: inputTk,
+        outputTokens: outputTk,
+        cacheReadTokens: cacheHit,
+        contextWindow: this.capabilities.contextWindow,
+        contextPercent:
+          this.capabilities.contextWindow > 0
+            ? Math.round((inputTk / this.capabilities.contextWindow) * 100)
+            : null,
+        modelName: data.model ?? this.id,
+        provider: this.provider,
+        thinkingEffort: options?.reasoningEffort,
       },
     };
   }
 
-  async *stream(messages: Message[], options?: ChatOptions): AsyncIterable<StreamChunk> {
+  async *stream(messages: Message[], options?: ChatOptions, signal?: AbortSignal): AsyncIterable<StreamChunk> {
     const body: Record<string, unknown> = {
       model: options?.model ?? this.id,
       messages: this.convertMessages(messages),
@@ -126,6 +175,24 @@ export class ZhipuAdapter implements ModelAdapter {
     if (options?.tools?.length) {
       body.tools = this.convertTools(options.tools);
     }
+    if (options?.responseFormat) {
+      body.response_format = options.responseFormat;
+    }
+    if (options?.toolChoice) {
+      body.tool_choice = options.toolChoice;
+    }
+    if (options?.thinking) {
+      body.thinking = options.thinking;
+    } else if (
+      this.id.startsWith("glm-5") ||
+      this.id.startsWith("glm-4.7") ||
+      this.id.startsWith("glm-4.6")
+    ) {
+      body.thinking = { type: "enabled", clear_thinking: false };
+    }
+    if (options?.reasoningEffort) {
+      body.reasoning_effort = options.reasoningEffort;
+    }
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
@@ -134,6 +201,7 @@ export class ZhipuAdapter implements ModelAdapter {
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(body),
+      signal,
     });
 
     if (!response.ok) {
@@ -148,8 +216,10 @@ export class ZhipuAdapter implements ModelAdapter {
     // Accumulate streaming tool call fragments
     const toolCallMap = new Map<number, { id: string; name: string; arguments: string }>();
     let finishReason = "stop";
+    let modelName = this.id;
     let inputTokens = 0;
     let outputTokens = 0;
+    let cacheHitTokens = 0;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -167,6 +237,7 @@ export class ZhipuAdapter implements ModelAdapter {
 
         try {
           const parsed = JSON.parse(data) as {
+            model?: string;
             choices?: Array<{
               delta?: {
                 content?: string;
@@ -179,11 +250,21 @@ export class ZhipuAdapter implements ModelAdapter {
               };
               finish_reason?: string | null;
             }>;
-            usage?: { prompt_tokens: number; completion_tokens: number };
+            usage?: {
+              prompt_tokens: number;
+              completion_tokens: number;
+              prompt_tokens_details?: {
+                cached_tokens?: number;
+              };
+            };
           };
 
           const choice = parsed.choices?.[0];
           if (!choice) continue;
+
+          if (parsed.model) {
+            modelName = parsed.model;
+          }
 
           const delta = choice.delta;
 
@@ -223,6 +304,7 @@ export class ZhipuAdapter implements ModelAdapter {
           if (parsed.usage) {
             inputTokens = parsed.usage.prompt_tokens;
             outputTokens = parsed.usage.completion_tokens;
+            cacheHitTokens = parsed.usage.prompt_tokens_details?.cached_tokens ?? 0;
           }
         } catch {
           // skip invalid chunks
@@ -242,11 +324,24 @@ export class ZhipuAdapter implements ModelAdapter {
       };
     }
 
-    		this.lastUsage = { inputTokens, outputTokens };
-		yield {
+    const usage: TokenUsage = {
+      inputTokens,
+      outputTokens,
+      cacheReadTokens: cacheHitTokens > 0 ? cacheHitTokens : undefined,
+      contextWindow: this.capabilities.contextWindow,
+      contextPercent:
+        this.capabilities.contextWindow > 0
+          ? Math.round((inputTokens / this.capabilities.contextWindow) * 100)
+          : null,
+      modelName,
+      provider: this.provider,
+      thinkingEffort: options?.reasoningEffort,
+    };
+    this.lastUsage = usage;
+    yield {
       type: "finish",
       finishReason: finishReason === "tool_calls" ? "tool-calls" : "stop",
-      usage: { inputTokens, outputTokens },
+      usage,
     };
   }
 
@@ -262,6 +357,9 @@ export class ZhipuAdapter implements ModelAdapter {
             role: "assistant",
             content: msg.content || null,
           };
+          if (msg.reasoningContent) {
+            result.reasoning_content = msg.reasoningContent;
+          }
           if (msg.toolCalls?.length) {
             result.tool_calls = msg.toolCalls.map((tc) => ({
               id: tc.id,
@@ -285,16 +383,17 @@ export class ZhipuAdapter implements ModelAdapter {
   }
 
   getUsage(): TokenUsage | undefined {
-	    return this.lastUsage;
-	  }
+    return this.lastUsage;
+  }
 
-	  private convertTools(tools: ToolDefinition[]): unknown[] {
+  private convertTools(tools: ToolDefinition[]): unknown[] {
     return tools.map((t) => ({
       type: "function",
       function: {
         name: t.name,
         description: t.description,
         parameters: t.inputSchema,
+        ...(t.strict !== undefined ? { strict: t.strict } : {}),
       },
     }));
   }

@@ -6,11 +6,19 @@ export interface ToolCall {
   input: Record<string, unknown>;
 }
 
+export type TextContentPart = { type: "text"; text: string };
+export type ImageContentPart = {
+  type: "image_url";
+  image_url: { url: string; detail?: "low" | "high" | "auto" };
+};
+export type ContentPart = TextContentPart | ImageContentPart;
+
 export interface Message {
   role: "system" | "user" | "assistant" | "tool";
-  content: string;
+  content: string | ContentPart[];
   toolCallId?: string;
   toolCalls?: ToolCall[];
+  reasoningContent?: string;
 }
 
 export interface ToolResult {
@@ -19,6 +27,7 @@ export interface ToolResult {
   isError: boolean;
   title?: string;
   metadata?: Record<string, unknown>;
+  contentParts?: ContentPart[];
 }
 
 export interface TokenUsage {
@@ -51,6 +60,7 @@ export interface ToolDefinition {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  strict?: boolean;
 }
 
 export interface ChatOptions {
@@ -59,6 +69,13 @@ export interface ChatOptions {
   temperature?: number;
   systemPrompt?: string;
   tools?: ToolDefinition[];
+  thinking?: { type: string; [key: string]: unknown };
+  reasoningEffort?: string;
+  responseFormat?: {
+    type: "text" | "json_object" | "json_schema";
+    json_schema?: { name: string; strict: boolean; schema: Record<string, unknown> };
+  };
+  toolChoice?: "auto" | "none" | "required" | { type: "function"; function: { name: string } };
 }
 
 export interface ChatResponse {
@@ -66,6 +83,7 @@ export interface ChatResponse {
   toolCalls: ToolCall[];
   finishReason: "stop" | "tool-calls" | "max-tokens";
   usage: TokenUsage;
+  reasoningContent?: string;
 }
 
 export type StreamChunk =
@@ -75,13 +93,14 @@ export type StreamChunk =
   | { type: "finish"; finishReason: string; usage: TokenUsage };
 
 export interface ModelAdapter {
-  readonly id: string;
+  id: string;
   readonly provider: string;
-  readonly capabilities: ModelCapabilities;
+  capabilities: ModelCapabilities;
 
-  chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse>;
-  stream(messages: Message[], options?: ChatOptions): AsyncIterable<StreamChunk>;
+  chat(messages: Message[], options?: ChatOptions, signal?: AbortSignal): Promise<ChatResponse>;
+  stream(messages: Message[], options?: ChatOptions, signal?: AbortSignal): AsyncIterable<StreamChunk>;
   getUsage?(): TokenUsage | undefined;
+  setModel?(modelId: string): void;
 }
 
 // ─── Tool System Types ────────────────────────────────────────
@@ -145,7 +164,7 @@ export interface AgentLoopEvent {
   toolCallId?: string;
   toolInput?: unknown;
   toolResult?: ToolResult;
-  finishReason?: "completed" | "max-loops" | "interrupted" | "error";
+  finishReason?: "completed" | "max-loops" | "interrupted" | "error" | "paused";
   usage?: TokenUsage;
   messages?: Message[];
 }
@@ -157,6 +176,7 @@ export interface AgentLoopConfig {
   refundableTools: string[];
   streaming: boolean;
   interruptible: boolean;
+  thinkingEffort?: string;
 }
 
 // ─── Config Types ─────────────────────────────────────────────

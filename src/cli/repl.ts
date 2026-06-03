@@ -35,10 +35,15 @@ export class REPL {
   private deps: REPLDependencies;
   private messages: Message[] = [];
   private sessionId: string | null = null;
+  private currentLoop: AgentLoop | null = null;
   // Permission tracking
   private approvedTools = new Set<string>();
   private deniedTools: string[] = [];
   private pendingPermissionTool: string | null = null;
+  private pendingToolCallInput: Record<string, unknown> | null = null;
+  private pendingToolCallId: string | null = null;
+  private pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> | null = null;
+  private pendingAssistantContent: string | null = null;
   // Token usage tracking
   private cumulativeInputTokens = 0;
   private cumulativeOutputTokens = 0;
@@ -62,6 +67,68 @@ export class REPL {
 
   async processInput(input: string): Promise<string> {
     const trimmed = input.trim();
+
+    // Handle pending permission response
+    if (this.pendingPermissionTool) {
+      const toolName = this.pendingPermissionTool;
+      const toolInput = this.pendingToolCallInput;
+      const toolCallId = this.pendingToolCallId ?? "";
+      const toolCalls = this.pendingToolCalls;
+      const assistantContent = this.pendingAssistantContent;
+      this.pendingPermissionTool = null;
+      this.pendingToolCallInput = null;
+      this.pendingToolCallId = null;
+      this.pendingToolCalls = null;
+      this.pendingAssistantContent = null;
+
+      // Push assistant message with tool calls (if not already in messages)
+      if (toolCalls && toolCalls.length > 0) {
+        this.messages.push({
+          role: "assistant",
+          content: assistantContent ?? "",
+          toolCalls: toolCalls.map((tc) => ({ id: tc.id, name: tc.name, input: tc.input })),
+        });
+      }
+
+      const lower = trimmed.toLowerCase();
+      if (lower === "y" || lower === "yes") {
+        this.approvedTools.add(toolName);
+        this.deps.onOutput(`[Permission granted for ${toolName}]\n`);
+        if (toolInput) {
+          const ctx = { workingDirectory: process.cwd(), sessionId: this.sessionId ?? "default" };
+          const realResult = await this.deps.toolRegistry.execute(
+            toolName,
+            toolInput,
+            ctx,
+            "yolo",
+          );
+          this.deps.onOutput(`[Result]\n${realResult.content}\n`);
+          if (toolCallId) {
+            this.messages.push({
+              role: "tool",
+              content: realResult.content,
+              toolCallId,
+            });
+          }
+        }
+        this.deps.onOutput("\n[Continuing...]\n");
+        return await this.chat("continue");
+      }
+      if (lower === "n" || lower === "no") {
+        this.deniedTools.push(toolName);
+        this.deps.onOutput(`[Permission denied for ${toolName}]\n`);
+        if (toolCallId) {
+          this.messages.push({
+            role: "tool",
+            content: `Permission denied for tool: ${toolName}`,
+            toolCallId,
+          });
+        }
+        return `Permission denied for ${toolName}`;
+      }
+      return "";
+    }
+
     if (!trimmed) return "";
 
     if (trimmed === "/exit" || trimmed === "/quit") {
@@ -74,6 +141,11 @@ export class REPL {
       this.sessionId = null;
       this.approvedTools.clear();
       this.deniedTools = [];
+      this.pendingPermissionTool = null;
+      this.pendingToolCallInput = null;
+      this.pendingToolCallId = null;
+      this.pendingToolCalls = null;
+      this.pendingAssistantContent = null;
       this.deps.onOutput("[New Session] Context cleared. Ready for a fresh start.\n");
       return "[New Session]";
     }
@@ -127,6 +199,10 @@ export class REPL {
     return `Skill failed: ${result.error.message}`;
   }
 
+  pause(): void {
+    this.currentLoop?.pause();
+  }
+
   private async chat(message: string): Promise<string> {
     if (!this.sessionId) {
       const session = this.deps.sessionStore.createSession(process.cwd());
@@ -134,15 +210,17 @@ export class REPL {
     }
 
     this.messages.push({ role: "user", content: message });
-    this.deps.sessionStore.appendMessage(this.sessionId, "user", message, 0);
+    this.deps.sessionStore.appendMessage(this.sessionId, "user", message, Math.ceil(message.length / 4));
 
     const adapter = this.deps.providerRegistry.getActiveAdapter();
+    const loopConfig = { ...this.deps.loopConfig, thinkingEffort: this.thinkingEffort };
     const loop = new AgentLoop(
       adapter,
       this.deps.toolRegistry,
       this.deps.permissionMode.value,
-      this.deps.loopConfig,
+      loopConfig,
     );
+    this.currentLoop = loop;
 
     let fullOutput = "";
     let isThinking = false;
@@ -159,6 +237,11 @@ export class REPL {
       }
     };
 
+    // Track tool calls for permission re-execution
+    const toolCallInputs = new Map<string, Record<string, unknown>>();
+    let currentAssistantContent = "";
+    let currentToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
+
     for await (const event of loop.run(this.messages)) {
       if (event.type === "text-delta" && event.text) {
         if (isThinking) {
@@ -169,6 +252,7 @@ export class REPL {
           isStreaming = true;
         }
         fullOutput += event.text;
+        currentAssistantContent += event.text;
         this.deps.onStreamChunk?.(event.text);
       } else if (event.type === "reasoning-delta" && event.text) {
         if (!isThinking) {
@@ -178,6 +262,11 @@ export class REPL {
       } else if (event.type === "tool-call") {
         endStreams();
         this.deps.onOutput(`[Calling: ${event.toolName}]\n`);
+        if (event.toolCallId && event.toolInput) {
+          const tc = { id: event.toolCallId, name: event.toolName ?? "", input: event.toolInput as Record<string, unknown> };
+          toolCallInputs.set(event.toolCallId, tc.input);
+          currentToolCalls.push(tc);
+        }
       } else if (event.type === "tool-result" && event.toolResult) {
         this.deps.onOutput(`[Result]\n${event.toolResult.content}\n`);
 
@@ -189,38 +278,46 @@ export class REPL {
             !this.deniedTools.includes(toolName) &&
             !this.approvedTools.has(toolName)
           ) {
-            this.deps.onOutput(`\n[Permission Request] Agent needs to use "${toolName}"\n`);
-            if (this.deps.confirm) {
-              const granted = await this.deps.confirm(
-                `Grant permission for tool "${toolName}"? (yes/no/skip)`,
-              );
-              if (granted) {
-                this.approvedTools.add(toolName);
-                this.deps.onOutput(`[Permission granted for ${toolName}]\n`);
-              } else {
-                this.deniedTools.push(toolName);
-                this.deps.onOutput(
-                  `\n[Paused] Waiting for your input. Type "yes" to grant permission, or continue with other tasks.\n`,
-                );
-                break;
-              }
-            } else {
-              this.deps.onOutput("\n[Paused] Waiting for your input.\n");
-              break;
-            }
+            const tcId = event.toolCallId ?? "";
+            const tcInput = toolCallInputs.get(tcId);
+            this.pendingPermissionTool = toolName;
+            this.pendingToolCallInput = tcInput ?? null;
+            this.pendingToolCallId = tcId;
+            this.pendingToolCalls = [...currentToolCalls];
+            this.pendingAssistantContent = currentAssistantContent;
+            this.deps.onOutput(
+              `\n[Permission Request] Allow tool "${toolName}"? Type "yes" to allow or "no" to deny.\n`,
+            );
+            this.deps.onOutput("\n");
+            break;
           }
         }
+
+        currentAssistantContent = "";
+        currentToolCalls = [];
       } else if (event.type === "finish") {
         endStreams();
         if (event.usage) {
           this.cumulativeInputTokens += event.usage.inputTokens ?? 0;
           this.cumulativeOutputTokens += event.usage.outputTokens ?? 0;
+          this.cumulativeCacheRead += event.usage.cacheReadTokens ?? 0;
+          this.cumulativeCacheWrite += event.usage.cacheWriteTokens ?? 0;
+          if (event.usage.thinkingEffort) {
+            this.thinkingEffort = event.usage.thinkingEffort;
+          }
         }
-        this.deps.onOutput(`\n[Finished: ${event.finishReason}]\n`);
+        if (event.finishReason === "paused") {
+          this.deps.onOutput("\n[Paused]\n");
+        } else {
+          this.deps.onOutput(`\n[Finished: ${event.finishReason}]\n`);
+        }
       } else if (event.type === "messages" && event.messages) {
         this.messages = event.messages;
       }
     }
+
+    // Clear current loop reference
+    this.currentLoop = null;
 
     // Flush any remaining streams
     endStreams();
@@ -249,7 +346,7 @@ export class REPL {
     this.deps.onStatusBarUpdate?.(statusData);
 
     if (fullOutput) {
-      this.deps.sessionStore.appendMessage(this.sessionId, "assistant", fullOutput, 0);
+      this.deps.sessionStore.appendMessage(this.sessionId, "assistant", fullOutput, Math.ceil(fullOutput.length / 4));
     }
 
     return fullOutput;
@@ -305,11 +402,11 @@ export class REPL {
       // biome-ignore lint/complexity/useLiteralKeys: fileStore is private
       const store = this.deps.memoryManager["fileStore"];
       const summarizer = new SessionSummarizer(adapter, store);
-      const result = await summarizer.summarize(
-        this.messages,
-        new Date().toISOString().slice(0, 10),
-      );
-      if (result.isOk() && result.value) {
+      const result = await Promise.race([
+        summarizer.summarize(this.messages, new Date().toISOString().slice(0, 10)),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+      ]);
+      if (result && "isOk" in result && result.isOk() && result.value) {
         await summarizer.storeSummary(result.value);
       }
     } catch {

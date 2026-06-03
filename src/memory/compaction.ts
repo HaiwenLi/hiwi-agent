@@ -25,7 +25,11 @@ export function shouldCompact(
   maxOutputTokens: number,
   reserved: number,
 ): boolean {
-  const totalTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+  const totalTokens = messages.reduce(
+    (sum, m) =>
+      sum + estimateTokens(typeof m.content === "string" ? m.content : JSON.stringify(m.content)),
+    0,
+  );
   const threshold = contextLimit - maxOutputTokens - reserved;
   return totalTokens >= threshold;
 }

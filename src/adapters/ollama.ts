@@ -1,11 +1,12 @@
 import type {
-  TokenUsage,
   ChatOptions,
   ChatResponse,
+  ContentPart,
   Message,
   ModelAdapter,
   ModelCapabilities,
   StreamChunk,
+  TokenUsage,
   ToolCall,
   ToolDefinition,
 } from "../types.js";
@@ -15,7 +16,6 @@ export const OLLAMA_MODELS: Record<string, ModelCapabilities> = {
   "llama3.1": { tools: true, vision: false, maxTokens: 32768, contextWindow: 128_000 },
   "qwen2.5": { tools: true, vision: false, maxTokens: 8192, contextWindow: 32768 },
   mistral: { tools: true, vision: false, maxTokens: 8192, contextWindow: 32768 },
-  codellama: { tools: false, vision: false, maxTokens: 16384, contextWindow: 16384 },
 };
 
 const DEFAULT_CAPABILITIES: ModelCapabilities = {
@@ -30,7 +30,7 @@ export class OllamaAdapter implements ModelAdapter {
   readonly provider = "ollama";
   readonly capabilities: ModelCapabilities;
   private baseUrl: string;
-	private lastUsage: TokenUsage | undefined;
+  private lastUsage: TokenUsage | undefined;
 
   constructor(options: { baseUrl?: string; model?: string }) {
     this.id = options.model ?? "llama3";
@@ -38,7 +38,7 @@ export class OllamaAdapter implements ModelAdapter {
     this.capabilities = OLLAMA_MODELS[this.id] ?? DEFAULT_CAPABILITIES;
   }
 
-  async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+  async chat(messages: Message[], options?: ChatOptions, signal?: AbortSignal): Promise<ChatResponse> {
     try {
       const body: Record<string, unknown> = {
         model: options?.model ?? this.id,
@@ -54,10 +54,19 @@ export class OllamaAdapter implements ModelAdapter {
         body.tools = this.convertTools(options.tools);
       }
 
+      if (options?.responseFormat) {
+        body.format = options.responseFormat.type === "json_object" ? "json" : undefined;
+      }
+
+      if (options?.toolChoice) {
+        body.tool_choice = options.toolChoice;
+      }
+
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal,
       });
 
       if (!response.ok) {
@@ -98,7 +107,7 @@ export class OllamaAdapter implements ModelAdapter {
     }
   }
 
-  async *stream(messages: Message[], options?: ChatOptions): AsyncIterable<StreamChunk> {
+  async *stream(messages: Message[], options?: ChatOptions, signal?: AbortSignal): AsyncIterable<StreamChunk> {
     const body: Record<string, unknown> = {
       model: options?.model ?? this.id,
       messages: this.convertMessages(messages),
@@ -108,10 +117,19 @@ export class OllamaAdapter implements ModelAdapter {
       body.tools = this.convertTools(options.tools);
     }
 
+    if (options?.responseFormat) {
+      body.format = options.responseFormat.type === "json_object" ? "json" : undefined;
+    }
+
+    if (options?.toolChoice) {
+      body.tool_choice = options.toolChoice;
+    }
+
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal,
     });
 
     if (!response.ok || !response.body) {
@@ -147,7 +165,8 @@ export class OllamaAdapter implements ModelAdapter {
             };
 
             // Reasoning content (thinking) — some Ollama-compatible servers include this
-            const reasoningContent = (chunk.message as any)?.reasoning_content ?? (chunk as any).reasoning_content;
+            const reasoningContent =
+              (chunk.message as any)?.reasoning_content ?? (chunk as any).reasoning_content;
             if (reasoningContent) {
               yield { type: "reasoning-delta", text: reasoningContent as string };
             }
@@ -206,20 +225,29 @@ export class OllamaAdapter implements ModelAdapter {
   }
 
   getUsage(): TokenUsage | undefined {
-	    return this.lastUsage;
-	  }
+    return this.lastUsage;
+  }
 
-	  private convertMessages(messages: Message[]): Array<Record<string, unknown>> {
+  private convertMessages(messages: Message[]): Array<Record<string, unknown>> {
     return messages.map((msg) => {
       switch (msg.role) {
         case "system":
-          return { role: "system", content: msg.content };
-        case "user":
-          return { role: "user", content: msg.content };
+          return { role: "system", content: this.extractText(msg.content) };
+        case "user": {
+          const result: Record<string, unknown> = {
+            role: "user",
+            content: this.extractText(msg.content),
+          };
+          const images = this.extractImages(msg.content);
+          if (images.length) {
+            result.images = images;
+          }
+          return result;
+        }
         case "assistant": {
           const result: Record<string, unknown> = {
             role: "assistant",
-            content: msg.content || "",
+            content: this.extractText(msg.content) || "",
           };
           if (msg.toolCalls?.length) {
             result.tool_calls = msg.toolCalls.map((tc) => ({
@@ -235,6 +263,24 @@ export class OllamaAdapter implements ModelAdapter {
           };
       }
     });
+  }
+
+  private extractText(content: string | ContentPart[]): string {
+    if (typeof content === "string") return content;
+    return content
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map((p) => p.text)
+      .join("\n");
+  }
+
+  private extractImages(content: string | ContentPart[]): string[] {
+    if (typeof content === "string") return [];
+    return content
+      .filter((p): p is { type: "image_url"; image_url: { url: string } } => p.type === "image_url")
+      .map((p) => {
+        const url = p.image_url.url;
+        return url.startsWith("data:") ? url.replace(/^data:image\/[^;]+;base64,/, "") : url;
+      });
   }
 
   private convertTools(tools: ToolDefinition[]): Array<{

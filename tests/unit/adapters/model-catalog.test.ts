@@ -25,6 +25,12 @@ describe("buildCatalog", () => {
   it("returns providers with their models", () => {
     const catalog = buildCatalog();
 
+    expect(catalog.deepseek).toBeDefined();
+    expect(catalog.deepseek.some((m) => m.id === "deepseek-v4-pro")).toBe(true);
+
+    expect(catalog.openai).toBeDefined();
+    expect(catalog.openai.some((m) => m.id === "gpt-4o")).toBe(true);
+
     expect(catalog.anthropic).toBeDefined();
     expect(catalog.anthropic.some((m) => m.id === "claude-sonnet-4-6")).toBe(true);
     expect(catalog.anthropic.some((m) => m.id === "claude-opus-4-7")).toBe(true);
@@ -33,7 +39,7 @@ describe("buildCatalog", () => {
     expect(catalog.minimax.some((m) => m.id === "MiniMax-M2.7")).toBe(true);
 
     expect(catalog.zhipu).toBeDefined();
-    expect(catalog.zhipu.some((m) => m.id === "glm-4-plus")).toBe(true);
+    expect(catalog.zhipu.some((m) => m.id === "glm-4.7")).toBe(true);
 
     expect(catalog.ollama).toBeDefined();
     expect(catalog.ollama.some((m) => m.id === "llama3")).toBe(true);

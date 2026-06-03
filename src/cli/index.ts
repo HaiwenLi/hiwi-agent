@@ -88,7 +88,14 @@ export async function main(options: CLIOptions = {}): Promise<void> {
     }
   }
 
-  const toolRegistry = new ToolRegistry();
+  const permissionMode: { value: PermissionMode } = { value: options.yolo ? "yolo" : "normal" };
+
+  const toolRegistry = new ToolRegistry({
+    onPermission: async (_toolName, _capability) => {
+      if (permissionMode.value === "yolo") return true;
+      return false;
+    },
+  });
 
   const memoryDir = path.join(globalDir, "memory");
   const fileStore = new MemoryFileStore(memoryDir);
@@ -145,18 +152,18 @@ export async function main(options: CLIOptions = {}): Promise<void> {
   const commandRegistry = new CommandRegistry();
   commandRegistry.registerBuiltinCommands();
 
-  const permissionMode: { value: PermissionMode } = { value: "normal" };
-
-  let repl: REPL;
+  let repl: REPL | null = null;
 
   const app = createApp({
     onInput: async (text) => {
+      if (!repl) return; // not ready yet
       const result = await repl.processInput(text);
       if (result === "exit") {
         app.destroy();
         process.exit(0);
       }
     },
+    onPauseRequest: () => repl?.pause(),
     fetchCommands: async () => commandRegistry.list(),
   });
 
@@ -186,9 +193,10 @@ export async function main(options: CLIOptions = {}): Promise<void> {
   // Show initial status bar with provider/model info
   const adapter = providerRegistry.getActiveAdapter();
   const initialStatus = repl.getStatusBarData();
-  initialStatus.modelName = adapter?.id ?? "unknown";
+  initialStatus.modelName = config.activeModel ?? adapter?.id ?? "unknown";
   initialStatus.provider = adapter?.provider ?? "unknown";
   initialStatus.contextWindow = adapter?.capabilities?.contextWindow ?? 200000;
+  initialStatus.contextPercent = 0;
   app.setStatusBarData(initialStatus);
 
   await app.waitUntilExit();

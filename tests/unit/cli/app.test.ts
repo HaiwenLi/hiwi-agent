@@ -1,5 +1,5 @@
 import { createApp } from "@/cli/app.js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 describe("App (TUI)", () => {
   it("exports a createApp function", () => {
@@ -68,5 +68,11 @@ describe("App (TUI)", () => {
     }
     app.addStreamChunk("still responsive");
     app.endStream();
+  });
+
+  it("onPauseRequest callback is exposed in app handle", () => {
+    const onPause = vi.fn();
+    const app = createApp({ onInput: async () => {}, onPauseRequest: onPause });
+    expect(typeof (app as any).onPauseRequest).toBe("function");
   });
 });

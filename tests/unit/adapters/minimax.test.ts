@@ -16,13 +16,14 @@ describe("MiniMaxAdapter", () => {
   });
 
   it("has correct id and provider", () => {
-    expect(adapter.id).toBe("MiniMax-M2.7");
+    expect(adapter.id).toBe("MiniMax-M3");
     expect(adapter.provider).toBe("minimax");
   });
 
-  it("reports correct capabilities for MiniMax-M2.7", () => {
+  it("reports correct capabilities for MiniMax-M3", () => {
     expect(adapter.capabilities.tools).toBe(true);
     expect(adapter.capabilities.contextWindow).toBe(1_000_000);
+    expect(adapter.capabilities.maxTokens).toBe(64_000);
   });
 
   it("sends chat request in OpenAI-compatible format", async () => {
@@ -113,8 +114,11 @@ describe("MiniMaxAdapter", () => {
   });
 
   it("MINIMAX_MODELS has expected entries", () => {
-    expect(MINIMAX_MODELS["abab6.5s-chat"].contextWindow).toBe(245_000);
+    expect(MINIMAX_MODELS["MiniMax-M3"].tools).toBe(true);
+    expect(MINIMAX_MODELS["MiniMax-M3"].contextWindow).toBe(1_000_000);
     expect(MINIMAX_MODELS["MiniMax-M2.7"].tools).toBe(true);
     expect(MINIMAX_MODELS["MiniMax-M2.5"].vision).toBe(true);
+    expect(MINIMAX_MODELS["MiniMax-M2.1"].contextWindow).toBe(200_000);
+    expect(MINIMAX_MODELS["MiniMax-M2"].maxTokens).toBe(8_192);
   });
 });

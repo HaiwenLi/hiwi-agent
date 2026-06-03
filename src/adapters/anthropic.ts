@@ -1,12 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type {
-  TokenUsage,
   ChatOptions,
   ChatResponse,
+  ContentPart,
   Message,
   ModelAdapter,
   ModelCapabilities,
   StreamChunk,
+  TokenUsage,
   ToolCall,
   ToolDefinition,
 } from "../types.js";
@@ -24,7 +25,7 @@ export class AnthropicAdapter implements ModelAdapter {
   readonly provider = "anthropic";
   readonly capabilities: ModelCapabilities;
   private client: Anthropic;
-	private lastUsage: TokenUsage | undefined;
+  private lastUsage: TokenUsage | undefined;
 
   constructor(options: { apiKey: string; model?: string }) {
     this.id = options.model ?? DEFAULT_MODEL;
@@ -32,16 +33,29 @@ export class AnthropicAdapter implements ModelAdapter {
     this.client = new Anthropic({ apiKey: options.apiKey });
   }
 
-  async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+  async chat(messages: Message[], options?: ChatOptions, signal?: AbortSignal): Promise<ChatResponse> {
     const { system, convertedMessages } = this.convertMessages(messages);
-    const response = await this.client.messages.create({
+    const params: Record<string, unknown> = {
       model: options?.model ?? this.id,
       max_tokens: options?.maxTokens ?? this.capabilities.maxTokens,
       system: system ?? undefined,
       messages: convertedMessages,
       tools: options?.tools ? this.convertTools(options.tools) : undefined,
       temperature: options?.temperature,
-    });
+    };
+    if (options?.responseFormat?.type === "json_object") {
+      params.response_format = { type: "json_object" };
+    }
+    if (options?.toolChoice) {
+      params.tool_choice = this.convertToolChoice(options.toolChoice);
+    }
+    if (options?.thinking) {
+      params.thinking = options.thinking;
+    }
+    const response = await this.client.messages.create(
+      params as unknown as Anthropic.MessageCreateParamsNonStreaming,
+      { signal },
+    );
 
     const textParts = response.content.filter((b) => b.type === "text");
     const toolParts = response.content.filter((b) => b.type === "tool_use");
@@ -57,20 +71,42 @@ export class AnthropicAdapter implements ModelAdapter {
       usage: {
         inputTokens: response.usage.input_tokens,
         outputTokens: response.usage.output_tokens,
+        cacheReadTokens: (response.usage as any).cache_read_input_tokens,
+        cacheWriteTokens: (response.usage as any).cache_creation_input_tokens,
+        contextWindow: this.capabilities.contextWindow,
+        contextPercent:
+          this.capabilities.contextWindow > 0
+            ? Math.round((response.usage.input_tokens / this.capabilities.contextWindow) * 100)
+            : null,
+        modelName: response.model,
+        provider: this.provider,
       },
     };
   }
 
-  async *stream(messages: Message[], options?: ChatOptions): AsyncIterable<StreamChunk> {
+  async *stream(messages: Message[], options?: ChatOptions, signal?: AbortSignal): AsyncIterable<StreamChunk> {
     const { system, convertedMessages } = this.convertMessages(messages);
-    const stream = this.client.messages.stream({
+    const params: Record<string, unknown> = {
       model: options?.model ?? this.id,
       max_tokens: options?.maxTokens ?? this.capabilities.maxTokens,
       system: system ?? undefined,
       messages: convertedMessages,
       tools: options?.tools ? this.convertTools(options.tools) : undefined,
       temperature: options?.temperature,
-    });
+    };
+    if (options?.responseFormat?.type === "json_object") {
+      params.response_format = { type: "json_object" };
+    }
+    if (options?.toolChoice) {
+      params.tool_choice = this.convertToolChoice(options.toolChoice);
+    }
+    if (options?.thinking) {
+      params.thinking = options.thinking;
+    }
+    const stream = this.client.messages.stream(
+      params as unknown as Anthropic.MessageCreateParamsStreaming,
+      { signal },
+    );
 
     for await (const event of stream) {
       if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
@@ -90,22 +126,32 @@ export class AnthropicAdapter implements ModelAdapter {
     }
 
     const finalMessage = await stream.finalMessage();
-    this.lastUsage = {
+    const enrichedUsage: TokenUsage = {
       inputTokens: finalMessage.usage.input_tokens,
       outputTokens: finalMessage.usage.output_tokens,
+      cacheReadTokens: (finalMessage.usage as any).cache_read_input_tokens,
+      cacheWriteTokens: (finalMessage.usage as any).cache_creation_input_tokens,
+      contextWindow: this.capabilities.contextWindow,
+      contextPercent:
+        this.capabilities.contextWindow > 0
+          ? Math.round((finalMessage.usage.input_tokens / this.capabilities.contextWindow) * 100)
+          : null,
+      modelName: finalMessage.model,
+      provider: this.provider,
     };
+    this.lastUsage = enrichedUsage;
     yield {
       type: "finish",
       finishReason: finalMessage.stop_reason === "tool_use" ? "tool-calls" : "stop",
-      usage: this.lastUsage,
+      usage: enrichedUsage,
     };
   }
 
   getUsage(): TokenUsage | undefined {
-	    return this.lastUsage;
-	  }
+    return this.lastUsage;
+  }
 
-	  private convertMessages(messages: Message[]): {
+  private convertMessages(messages: Message[]): {
     system: string | null;
     convertedMessages: Anthropic.MessageParam[];
   } {
@@ -115,13 +161,13 @@ export class AnthropicAdapter implements ModelAdapter {
 
     for (const msg of messages) {
       if (msg.role === "tool" && msg.toolCallId) {
-        toolResults.set(msg.toolCallId, msg.content);
+        toolResults.set(msg.toolCallId, typeof msg.content === "string" ? msg.content : "");
       }
     }
 
     for (const msg of messages) {
       if (msg.role === "system") {
-        system = (system ?? "") + msg.content;
+        system = (system ?? "") + (typeof msg.content === "string" ? msg.content : "");
         continue;
       }
 
@@ -131,8 +177,14 @@ export class AnthropicAdapter implements ModelAdapter {
 
       if (msg.role === "assistant") {
         const content: Anthropic.ContentBlockParam[] = [];
+        if (msg.reasoningContent) {
+          content.push({
+            type: "thinking" as any,
+            thinking: msg.reasoningContent,
+          } as unknown as Anthropic.ContentBlockParam);
+        }
         if (msg.content) {
-          content.push({ type: "text", text: msg.content });
+          content.push({ type: "text", text: typeof msg.content === "string" ? msg.content : "" });
         }
         if (msg.toolCalls) {
           for (const tc of msg.toolCalls) {
@@ -148,7 +200,26 @@ export class AnthropicAdapter implements ModelAdapter {
         continue;
       }
 
-      converted.push({ role: "user", content: msg.content });
+      if (typeof msg.content === "string") {
+        converted.push({ role: "user", content: msg.content });
+      } else {
+        const blocks: Anthropic.ContentBlockParam[] = msg.content.map((p) => {
+          if (p.type === "text") return { type: "text", text: p.text } as Anthropic.TextBlockParam;
+          const match = p.image_url.url.match(/^data:([^;]+);base64,(.+)$/);
+          if (match) {
+            return {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: match[1] as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+                data: match[2],
+              },
+            } as Anthropic.ImageBlockParam;
+          }
+          return { type: "text", text: `[Image: ${p.image_url.url}]` } as Anthropic.TextBlockParam;
+        });
+        converted.push({ role: "user", content: blocks });
+      }
     }
 
     const assistantMsgs = messages.filter((m) => m.role === "assistant" && m.toolCalls?.length);
@@ -175,5 +246,20 @@ export class AnthropicAdapter implements ModelAdapter {
       description: t.description,
       input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
     }));
+  }
+
+  private convertToolChoice(toolChoice: ChatOptions["toolChoice"]): Anthropic.ToolChoice {
+    if (!toolChoice) return { type: "auto" };
+    if (typeof toolChoice === "string") {
+      switch (toolChoice) {
+        case "auto":
+          return { type: "auto" };
+        case "required":
+          return { type: "any" };
+        case "none":
+          return { type: "auto" };
+      }
+    }
+    return { type: "tool", name: toolChoice.function.name };
   }
 }

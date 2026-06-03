@@ -79,16 +79,18 @@ describe("ZhipuAdapter", () => {
     await expect(adapter.chat(messages)).rejects.toThrow(/Invalid or expired/);
   });
 
-  it("defaults to glm-5 model", () => {
+  it("defaults to glm-5.1 model", () => {
     const defaultAdapter = new ZhipuAdapter({ apiKey: "key" });
-    expect(defaultAdapter.id).toBe("glm-5");
+    expect(defaultAdapter.id).toBe("glm-5.1");
   });
 
   it("ZHIPU_MODELS has expected entries", () => {
-    expect(ZHIPU_MODELS["glm-4-plus"].contextWindow).toBe(200_000);
-    expect(ZHIPU_MODELS["glm-4v"].vision).toBe(true);
-    expect(ZHIPU_MODELS["glm-4v"].tools).toBe(false);
-    expect(ZHIPU_MODELS["glm-5"].contextWindow).toBe(200_000);
+    expect(ZHIPU_MODELS["glm-5.1"].contextWindow).toBe(200_000);
+    expect(ZHIPU_MODELS["glm-4.7-flashx"].tools).toBe(true);
+    expect(ZHIPU_MODELS["glm-4.7-flashx"].vision).toBe(false);
+    expect(ZHIPU_MODELS["glm-4.5-air"].contextWindow).toBe(128_000);
+    expect(ZHIPU_MODELS["glm-4.5-air"].maxTokens).toBe(96_000);
+    expect(ZHIPU_MODELS["glm-4.7"].contextWindow).toBe(200_000);
   });
 
   describe("streaming with reasoning", () => {

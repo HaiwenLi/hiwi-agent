@@ -4,6 +4,17 @@ import { ToolRegistry } from "@/core/tools.js";
 import type { AgentLoopConfig, PermissionMode, Tool, ToolContext } from "@/types.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+/**
+ * Helper: consume all events from an AgentLoop run into an array
+ */
+async function collectEvents(loop: AgentLoop, messages: Parameters<AgentLoop["run"]>[0]) {
+  const events: Awaited<ReturnType<ReturnType<AgentLoop["run"]>["next"]>>["value"][] = [];
+  for await (const event of loop.run(messages)) {
+    events.push(event);
+  }
+  return events;
+}
+
 const DEFAULT_CONFIG: AgentLoopConfig = {
   maxLoops: 50,
   maxOutputTokensPerTurn: 4096,
@@ -222,6 +233,112 @@ describe("AgentLoop", () => {
 
     expect(events.some((e) => e.type === "step-start")).toBe(true);
     expect(events.some((e) => e.type === "step-finish")).toBe(true);
+  });
+
+  it("can be paused mid-stream and yields paused finish reason", async () => {
+    const adapter = new MockAdapter(
+      [{ content: "Hello world!", toolCalls: [], finishReason: "stop" }],
+      { streamDelay: 5 },
+    );
+    const config: AgentLoopConfig = { ...DEFAULT_CONFIG, streaming: true };
+    const loop = new AgentLoop(adapter, toolRegistry, "normal", config);
+
+    // Start consuming events; pause asynchronously after first chunk
+    const eventsPromise = (async () => {
+      const evts: any[] = [];
+      for await (const event of loop.run([{ role: "user", content: "hi" }])) {
+        evts.push(event);
+      }
+      return evts;
+    })();
+
+    // Yield to event loop so the stream starts, then pause
+    await new Promise((r) => setTimeout(r, 2));
+    loop.pause();
+
+    const events = await eventsPromise;
+    const finishEvent = events.find((e) => e.type === "finish");
+    expect(finishEvent?.finishReason).toBe("paused");
+    expect(events.some((e) => e.type === "text-delta")).toBe(true);
+    expect(events.some((e) => e.type === "messages")).toBe(true);
+  });
+
+  it("pausing mid-stream preserves partial content in messages", async () => {
+    const adapter = new MockAdapter(
+      [
+        {
+          content: "This is a long response that will be interrupted",
+          toolCalls: [],
+          finishReason: "stop",
+        },
+      ],
+      { streamDelay: 5 },
+    );
+    const config: AgentLoopConfig = { ...DEFAULT_CONFIG, streaming: true };
+    const loop = new AgentLoop(adapter, toolRegistry, "normal", config);
+
+    const eventsPromise = (async () => {
+      const evts: any[] = [];
+      for await (const event of loop.run([{ role: "user", content: "hi" }])) {
+        evts.push(event);
+      }
+      return evts;
+    })();
+
+    await new Promise((r) => setTimeout(r, 2));
+    loop.pause();
+
+    const events = await eventsPromise;
+    const messagesEvent = events.find((e) => e.type === "messages");
+    expect(messagesEvent).toBeDefined();
+    expect(messagesEvent!.messages!.length).toBeGreaterThan(0);
+    // Should include partial assistant content
+    const assistantMsgs = messagesEvent!.messages!.filter(
+      (m: any) => m.role === "assistant",
+    );
+    expect(assistantMsgs.length).toBeGreaterThan(0);
+    expect(assistantMsgs[0]!.content.length).toBeGreaterThan(0);
+  });
+
+  it("can pause during non-streaming mode (between chunks)", async () => {
+    const adapter = new MockAdapter([
+      { content: "Response 1", toolCalls: [], finishReason: "stop" },
+    ]);
+    const config: AgentLoopConfig = { ...DEFAULT_CONFIG, streaming: false, maxLoops: 50 };
+    const loop = new AgentLoop(adapter, toolRegistry, "normal", config);
+
+    const eventsPromise = (async () => {
+      const evts: any[] = [];
+      for await (const event of loop.run([{ role: "user", content: "hi" }])) {
+        evts.push(event);
+      }
+      return evts;
+    })();
+
+    // Pause immediately - the non-streaming chat() finishes in one microtask
+    // so pause must be set before any await in the loop
+    loop.pause();
+
+    const events = await eventsPromise;
+    const finishEvent = events.find((e) => e.type === "finish");
+    // In non-streaming mode the chat call completes before checking pause,
+    // but the loop checks pause at the next iteration boundary
+    expect(finishEvent?.finishReason).toBe("paused");
+  });
+
+  it("pausing a fresh loop before run yields paused immediately", async () => {
+    const adapter = new MockAdapter([
+      { content: "Hello", toolCalls: [], finishReason: "stop" },
+    ]);
+    const loop = new AgentLoop(adapter, toolRegistry, "normal", DEFAULT_CONFIG);
+
+    // Pause before running
+    loop.pause();
+
+    const events = await collectEvents(loop, [{ role: "user", content: "hi" }]);
+    const finishEvent = events.find((e) => e.type === "finish");
+    expect(finishEvent?.finishReason).toBe("paused");
+    expect(events.some((e) => e.type === "text-delta")).toBe(false);
   });
 
   it("tool errors are fed back as tool results, loop continues", async () => {

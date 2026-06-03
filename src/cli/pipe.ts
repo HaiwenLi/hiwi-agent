@@ -5,6 +5,7 @@ import type { ToolRegistry } from "../core/tools.js";
 import type { MemoryManager } from "../memory/manager.js";
 import type { ProviderRegistry } from "../adapters/registry.js";
 import type { SessionStore } from "../memory/session.js";
+import { SkillRegistry } from "../skills/registry.js";
 import type { AgentLoopConfig, Message, PermissionMode } from "../types.js";
 
 export interface PipeRunnerDeps {
@@ -24,7 +25,7 @@ export async function runPipeMode(deps: PipeRunnerDeps): Promise<void> {
   registerAgentTools(toolRegistry, {
     adapter: () => providerRegistry.getActiveAdapter(),
     memoryManager,
-    skillRegistry: null as never,
+    skillRegistry: new SkillRegistry(),
     providerRegistry,
     loopConfig,
     permissionMode: () => permissionMode,

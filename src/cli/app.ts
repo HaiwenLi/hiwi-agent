@@ -17,13 +17,16 @@ export interface SlashCommand {
 }
 
 export interface AppCallbacks {
-	onInput: (text: string) => Promise<void>;
-	fetchCommands?: () => Promise<SlashCommand[]>;
+  onInput: (text: string) => Promise<void>;
+  fetchCommands?: () => Promise<SlashCommand[]>;
+  onPauseRequest?: () => void;
 }
 
 const MAX_LINES = 500;
 const THINKING_PREVIEW_LINES = 3;
 const THINKING_MAX_FOLDED = 6;
+const OUTPUT_FOLD_LINES = 50;
+const OUTPUT_FOLD_PREVIEW = 15;
 const POPOUP_MAX_VISIBLE = 8;
 
 const ROLE_STYLES: Record<string, (text: string) => string> = {
@@ -47,6 +50,7 @@ class ChatComponent implements Component {
 	private streamingText = "";
 	private thinkingBuffer = "";
 	private showThinking = false;
+	private showFullOutputs = new Set<number>();
 	private statusData: TokenUsage = {
 		inputTokens: 0,
 		outputTokens: 0,
@@ -101,7 +105,14 @@ class ChatComponent implements Component {
 		for (const line of this.lines) {
 			if (line.role === "assistant") {
 				const md = new Markdown(line.text, 0, 0, this.mdTheme);
-				result.push(...md.render(width));
+				const mdLines = md.render(width);
+				if (mdLines.length > OUTPUT_FOLD_LINES && !this.showFullOutputs.has(line.id)) {
+					result.push(...mdLines.slice(0, OUTPUT_FOLD_PREVIEW));
+					const remaining = mdLines.length - OUTPUT_FOLD_PREVIEW;
+					result.push(`\x1b[90m\x1b[2m  ═══ ${remaining} more lines (Ctrl+O to expand) ═══\x1b[0m`);
+				} else {
+					result.push(...mdLines);
+				}
 			} else if (line.role === "thinking") {
 				result.push(...this.renderThinking(line.text, width));
 			} else {
@@ -216,7 +227,11 @@ class ChatComponent implements Component {
 			else if (d.contextPercent > 70) contextColor = "33";
 		}
 
-		const left = `\x1b[${contextColor}m↑${formatTokens(d.inputTokens)} ↓${formatTokens(d.outputTokens)} ${contextStr}/${formatTokens(d.contextWindow ?? 200000)}\x1b[0m`;
+		const cachePart = d.cacheReadTokens != null && d.cacheReadTokens > 0
+			? ` \x1b[32m\x1b[2mcache${formatTokens(d.cacheReadTokens)}\x1b[0m`
+			: "";
+
+		const left = `\x1b[${contextColor}m↑${formatTokens(d.inputTokens)} ↓${formatTokens(d.outputTokens)}${cachePart} ${contextStr}/${formatTokens(d.contextWindow ?? 200000)}\x1b[0m`;
 		const effort = d.thinkingEffort ?? "high";
 		const right = `${d.provider} ${d.modelName} \x1b[90m[\x1b[37m${effort}\x1b[90m]\x1b[0m`;
 		const leftWidth = visibleWidth(left);
@@ -225,11 +240,18 @@ class ChatComponent implements Component {
 		return `${left}${" ".repeat(padding)}${right}`;
 	}
 
-	handleInput(data: string): void {
-		if (isKeyRelease(data)) return;
+  handleInput(data: string): void {
+    if (isKeyRelease(data)) return;
 
-		// Popup navigation
-		if (this.popupVisible) {
+    // ESC during processing → pause the agent
+    if (this.processing && matchesKey(data, Key.escape)) {
+      this.callbacks.onPauseRequest?.();
+      this.addOutput("[Pausing...]", "system");
+      return;
+    }
+
+    // Popup navigation
+    if (this.popupVisible) {
 			if (matchesKey(data, Key.up)) {
 				this.popupIndex = Math.max(0, this.popupIndex - 1);
 				this.requestRender();
@@ -264,7 +286,24 @@ class ChatComponent implements Component {
 		}
 
 		if (!this.popupVisible && matchesKey(data, Key.ctrl("o"))) {
-			this.showThinking = !this.showThinking;
+			let handled = false;
+			// Expand most recent folded assistant output first
+			for (let i = this.lines.length - 1; i >= 0; i--) {
+				const line = this.lines[i];
+				if (line.role === "assistant" && !this.showFullOutputs.has(line.id)) {
+					const md = new Markdown(line.text, 0, 0, this.mdTheme);
+					// Estimate: if text has many lines, it qualifies for folding
+					const hardLineCount = line.text.split("\n").length;
+				if (hardLineCount > OUTPUT_FOLD_LINES / 3) {
+					this.showFullOutputs.add(line.id);
+						handled = true;
+						break;
+					}
+				}
+			}
+			if (!handled) {
+				this.showThinking = !this.showThinking;
+			}
 			this.requestRender();
 			return;
 		}
@@ -296,30 +335,35 @@ class ChatComponent implements Component {
 		}
 	}
 
-	private submitInput(): void {
-		const text = this.input;
-		if (!text.trim()) return;
-		this.popupVisible = false;
-		this.pushLine(text, "user");
-		this.input = "";
-		this.processing = true;
-		this.loader?.start();
-		this.requestRender();
-		this.callbacks.onInput(text).then(() => {
-			this.processing = false;
-			this.loader?.stop();
-			this.requestRender();
-		});
-	}
+  private submitInput(): void {
+    const text = this.input;
+    if (!text.trim()) return;
+    this.popupVisible = false;
+    this.pushLine(text, "user");
+    this.input = "";
+    this.processing = true;
+    this.loader?.start();
+    this.requestRender();
+    this.callbacks.onInput(text).then(() => {
+      this.processing = false;
+      this.loader?.stop();
+      this.requestRender();
+    });
+  }
+
+  /** Called externally when agent paused — resets UI state */
+  onPause(): void {
+    this.processing = false;
+    this.loader?.stop();
+    this.requestRender();
+  }
 
 	private updatePopupState(): void {
-		if (this.input.startsWith("/") && !this.input.includes(" ")) {
+		if (this.input.startsWith("/")) {
 			const filtered = this.getFilteredCommands();
-			if (filtered.length > 0) {
-				this.popupVisible = true;
+			this.popupVisible = filtered.length > 0;
+			if (this.popupVisible) {
 				this.popupIndex = Math.min(this.popupIndex, Math.min(filtered.length, POPOUP_MAX_VISIBLE) - 1);
-			} else {
-				this.popupVisible = false;
 			}
 		} else {
 			this.popupVisible = false;
@@ -388,14 +432,16 @@ class ChatComponent implements Component {
 }
 
 export interface AppHandle {
-	addOutput: (text: string, role?: OutputLine["role"]) => void;
-	addStreamChunk: (chunk: string) => void;
-	endStream: () => void;
-	addThinkingChunk: (chunk: string) => void;
-	endThinking: () => void;
-	setStatusBarData: (data: TokenUsage) => void;
-	destroy: () => void;
-	waitUntilExit: () => Promise<void>;
+  addOutput: (text: string, role?: OutputLine["role"]) => void;
+  addStreamChunk: (chunk: string) => void;
+  endStream: () => void;
+  addThinkingChunk: (chunk: string) => void;
+  endThinking: () => void;
+  setStatusBarData: (data: TokenUsage) => void;
+  destroy: () => void;
+  waitUntilExit: () => Promise<void>;
+  /** Called when ESC is pressed during agent processing */
+  onPauseRequest?: () => void;
 }
 
 export function createApp(callbacks: AppCallbacks): AppHandle {
@@ -411,7 +457,7 @@ export function createApp(callbacks: AppCallbacks): AppHandle {
 		chat.setExitResolve(resolve);
 	});
 
-	return {
+	const handle: AppHandle = {
 		addOutput: (text, role) => chat.addOutput(text, role),
 		addStreamChunk: (chunk) => chat.addStreamChunk(chunk),
 		endStream: () => chat.endStream(),
@@ -424,4 +470,12 @@ export function createApp(callbacks: AppCallbacks): AppHandle {
 		},
 		waitUntilExit: () => exitPromise,
 	};
+
+	// Pause request: ESC → ChatComponent → AppHandle.onPauseRequest
+	handle.onPauseRequest = () => {
+		chat.onPause();
+		callbacks.onPauseRequest?.();
+	};
+
+	return handle;
 }

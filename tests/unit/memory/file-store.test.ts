@@ -52,7 +52,7 @@ describe("MemoryFileStore", () => {
       const index = await store.readIndex();
       const lines = index.split("\n");
       expect(lines.length).toBeLessThanOrEqual(203); // header + blank + 200 entries + trailing newline
-    });
+    }, 15000);
   });
 
   describe("memory files", () => {

@@ -5,11 +5,12 @@ Personal AI agent with persistent memory, multi-model support, and reusable skil
 ## Features
 
 - **Hybrid Memory** — MEMORY.md index + mem0 semantic search with local Ollama embeddings
-- **Multi-Provider** — Anthropic, OpenAI, DeepSeek, Ollama, Zhipu, Kimi, MiniMax via unified adapter interface with reasoning/thinking support across all providers
+- **Multi-Provider** — Anthropic, OpenAI, DeepSeek, Ollama, Zhipu, Kimi, MiniMax via unified adapter interface with reasoning/thinking support, structured JSON output, and tool_choice across all providers
+- **Vision Support** — Multimodal image input via `ContentPart[]` message format, `read_image` tool with base64 encoding, and automatic content-parts bridge from tool results to model
 - **Skill System** — Markdown-based SKILL.md files with frontmatter, supports domain/workflow/meta skill types
 - **Terminal UI** — pi-based differential rendering engine with animated thinking loader, streaming markdown output, reasoning display (collapsible), slash-command popup, and token usage status bar
 - **MCP Server** — Can run as an MCP server (stdio or SSE) for other agents to connect
-- **20+ Built-in Tools** — File ops, search, git, web, LSP, subagent, academic search, and more
+- **21+ Built-in Tools** — File ops, search, git, web, LSP, subagent, academic search, image reading, and more
 - **Permission Model** — Normal (ask before destructive), Auto (auto-approve read-only), YOLO (auto-approve all)
 - **Context Compaction** — Automatic token management with LLM-generated summaries when approaching limits
 
@@ -105,7 +106,8 @@ Configuration is loaded from two locations, merged left-to-right:
     "budgetTotal": 50,
     "refundableTools": ["read_file", "glob", "grep", "web_search"],
     "streaming": true,
-    "interruptible": true
+    "interruptible": true,
+    "thinkingEffort": "high"
   }
 }
 ```
@@ -166,17 +168,38 @@ The TUI supports real-time streaming with visual separation of thinking and mode
 - **Streaming markdown** — Model output is rendered incrementally via `onStreamChunk` with full markdown parsing
 - **Thinking display** — Reasoning content shown in italic dim style, collapsible with `Ctrl+O`
 - **Animated loader** — Braille spinner during thinking phases, built on pi's `Loader` component pattern
-- **Thinking effort** — Configurable via `/effort` command (low/medium/high/max), shown in status bar as `[effort]`
-- **Token tracking** — Input/output token counts with context window percentage in the status bar. Falls back to content-length estimation when the API doesn't return usage in streaming mode
+- **Thinking effort** — Configurable via `/effort` command (low/medium/high/max) or `thinkingEffort` in config. Shown in status bar as `[effort]`
+- **Default thinking** — Automatically enabled for DeepSeek and Kimi K2.x models. DeepSeek defaults to `reasoning_effort: "high"`
+- **Multi-turn reasoning** — `reasoning_content` is persisted across turns and passed back to DeepSeek API (required to avoid 400 errors)
+- **Token tracking** — Input/output token counts with context window percentage in the status bar. Falls back to content-length estimation when the API doesn't return usage in streaming mode. Cache read/write tokens tracked for DeepSeek and Anthropic
 - **Adapter support** — All adapters emit `reasoning-delta` events:
 
 | Adapter | Reasoning Mechanism |
 |---------|-------------------|
 | Anthropic | `thinking_delta` SDK event |
-| OpenAI-compat (DeepSeek, Kimi, GPT) | `reasoning_content` in delta |
+| OpenAI-compat (DeepSeek, Kimi, GPT) | `reasoning_content` in delta + `<think>` XML tag parsing in content |
 | Zhipu (GLM) | `reasoning_content` in delta |
 | MiniMax | `reasoning_content` in delta + `<think>` XML tag parsing in content |
 | Ollama | `reasoning_content` in message/delta |
+
+## Structured Output
+
+All adapters support OpenAI-compatible `response_format` and `tool_choice` parameters:
+
+- **JSON mode** — Set `response_format: { type: "json_object" }` in `ChatOptions`. Supported by DeepSeek, Kimi (object-only), Zhipu (glm-4.7+), and Anthropic
+- **Strict tool mode** — DeepSeek Beta supports `strict: true` on tool function definitions with JSON Schema enforcement (`base_url` must point to `https://api.deepseek.com/beta`)
+- **Tool choice** — Control tool invocation with `tool_choice`: `"auto"`, `"none"`, `"required"`, or specific function. Anthropic uses translated enum (`"any"`/`"tool"`)
+
+See [docs/model_comparison.md](docs/model_comparison.md) for the full provider capability matrix and known quirks.
+
+## Vision (Multimodal)
+
+Vision-capable models can process images via the `read_image` tool or programmatic `ContentPart[]` injection:
+
+- **Content parts** — `Message.content` supports `string | ContentPart[]` where `ContentPart` is `{ type: "text", text } | { type: "image_url", image_url: { url, detail? } }`
+- **read_image tool** — Reads image files from disk, detects MIME type, encodes as base64 data URL, and returns content parts for the next model turn via `ToolResult.contentParts`
+- **Content bridge** — When a `ToolResult` includes `contentParts`, the agent loop automatically pushes a `user` message with those parts (instead of a `tool` message), enabling the vision model to "see" the image
+- **Adapter formats** — OpenAI-compat providers use `image_url` content parts; Anthropic translates to `{ type: "image", source: { type: "base64", media_type, data } }`; Ollama collects image data into the `images` array
 
 ## Memory System
 
@@ -198,6 +221,7 @@ Hybrid architecture combining a hand-editable Markdown index with vector-based s
 | **Execution** | bash, task, subagent |
 | **Web** | web_search, web_fetch, academic_search |
 | **Git** | git, repo_overview |
+| **Vision** | read_image (file → base64 → content parts) |
 | **Memory** | memory_search, memory_add, memory_get_context, memory_forget |
 | **Skills** | skill_execute, skill_list |
 | **Other** | question, todo |
@@ -208,12 +232,11 @@ Hybrid architecture combining a hand-editable Markdown index with vector-based s
 hiwi-agent/
 ├── src/
 │   ├── core/           # Agent loop, tool registry, config
-│   ├── adapters/       # Model providers (all with reasoning_content support)
-│   │                   #   Anthropic (thinking_delta), OpenAI-compat, Zhipu,
-│   │                   #   MiniMax, Ollama, Mock
+│   ├── adapters/       # Model providers (all with reasoning_content + structured output)
+│   │                   #   Anthropic, OpenAI-compat, Zhipu, MiniMax, Ollama, Mock
 │   ├── memory/         # MEMORY.md, mem0, compaction, auto-extraction
 │   ├── skills/         # SKILL.md loader, executor, composer, importer
-│   ├── tools/          # 20+ built-in tools
+│   ├── tools/          # 21+ built-in tools (including read_image)
 │   ├── mcp/            # MCP server (stdio + SSE)
 │   ├── tui/            # Pi TUI engine — differential rendering
 │   │   ├── components/ # Loader (animated spinner), Text (word-wrapping),
@@ -224,7 +247,7 @@ hiwi-agent/
 │   └── cli/            # Terminal UI (ChatComponent), REPL, commands, pipe mode
 ├── skills/             # Built-in skills (paper-search, code-review)
 ├── config/             # Default configuration
-└── tests/              # 86 test files (unit + integration)
+└── tests/              # 79 test files, 665 tests (unit + integration)
 ```
 
 ## Development

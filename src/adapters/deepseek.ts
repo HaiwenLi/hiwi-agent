@@ -11,21 +11,16 @@ import type {
   ToolDefinition,
 } from "../types.js";
 
-export const OPENAI_COMPAT_MODELS: Record<string, ModelCapabilities> = {
-  // Kimi models
-  "kimi-k2.6": { tools: true, vision: true, maxTokens: 32_000, contextWindow: 262_144 },
-  "kimi-k2.5": { tools: true, vision: true, maxTokens: 32_000, contextWindow: 262_144 },
-  // Legacy / backward-compat
-  "kimi-k2-thinking": { tools: true, vision: false, maxTokens: 32_000, contextWindow: 262_144 },
-  "abab-7": { tools: true, vision: false, maxTokens: 8_192, contextWindow: 128_000 },
+export const DEEPSEEK_MODELS: Record<string, ModelCapabilities> = {
+  "deepseek-v4-pro": { tools: true, vision: false, maxTokens: 384_000, contextWindow: 1_000_000 },
+  "deepseek-v4-flash": { tools: true, vision: false, maxTokens: 384_000, contextWindow: 1_000_000 },
+  "deepseek-v4-pro[1m]": { tools: true, vision: false, maxTokens: 384_000, contextWindow: 1_000_000 },
 };
 
-const DEFAULT_CAPABILITIES: ModelCapabilities = {
-  tools: true,
-  vision: false,
-  maxTokens: 16384,
-  contextWindow: 128_000,
-};
+const DEFAULT_MODEL = "deepseek-v4-pro";
+
+const THINKING_DEFAULT = { type: "enabled" as const };
+const REASONING_EFFORT_DEFAULT = "high";
 
 function stripThinkTags(text: string): { thinkContent: string; cleanContent: string } {
   const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
@@ -51,21 +46,12 @@ function buildUsage(raw: {
   completion_tokens?: number;
   prompt_cache_hit_tokens?: number;
   prompt_cache_miss_tokens?: number;
-  cached_tokens?: number;
 }): TokenUsage {
-  const inputTokens = raw.prompt_tokens ?? 0;
-  const outputTokens = raw.completion_tokens ?? 0;
-  // DeepSeek cache format
-  const cacheHit = raw.prompt_cache_hit_tokens;
-  const cacheMiss = raw.prompt_cache_miss_tokens;
-  // Kimi cache format
-  const cached = raw.cached_tokens;
-
   return {
-    inputTokens,
-    outputTokens,
-    cacheReadTokens: cacheHit ?? cached,
-    cacheWriteTokens: cacheMiss,
+    inputTokens: raw.prompt_tokens ?? 0,
+    outputTokens: raw.completion_tokens ?? 0,
+    cacheReadTokens: raw.prompt_cache_hit_tokens,
+    cacheWriteTokens: raw.prompt_cache_miss_tokens,
   };
 }
 
@@ -73,64 +59,38 @@ function enrichUsage(
   usage: TokenUsage,
   contextWindow: number,
   modelName: string,
-  provider: string,
   thinkingEffort?: string,
 ): TokenUsage {
   return {
     ...usage,
     contextWindow,
-    contextPercent:
-      contextWindow > 0 ? Math.round((usage.inputTokens / contextWindow) * 100) : null,
+    contextPercent: contextWindow > 0 ? Math.round((usage.inputTokens / contextWindow) * 100) : null,
     modelName,
-    provider,
+    provider: "deepseek",
     thinkingEffort,
   };
 }
 
-export class OpenAICompatAdapter implements ModelAdapter {
+export class DeepSeekAdapter implements ModelAdapter {
   id: string;
-  readonly provider: string;
+  readonly provider = "deepseek";
   capabilities: ModelCapabilities;
   private client: OpenAI;
   private lastUsage: TokenUsage | undefined;
 
-  constructor(options: {
-    provider: string;
-    apiKey?: string;
-    baseUrl?: string;
-    model?: string;
-  }) {
-    this.id = options.model ?? "gpt-4o";
-    this.provider = options.provider;
-    this.capabilities = OPENAI_COMPAT_MODELS[this.id] ?? DEFAULT_CAPABILITIES;
-    if (!options.apiKey) throw new Error(`No API key configured for provider ${options.provider}. Set the corresponding env var or add apiKey to config.`);
+  constructor(options: { apiKey?: string; baseUrl?: string; model?: string }) {
+    this.id = options.model ?? DEFAULT_MODEL;
+    this.capabilities = DEEPSEEK_MODELS[this.id] ?? DEEPSEEK_MODELS[DEFAULT_MODEL];
+    if (!options.apiKey) throw new Error("No API key configured for DeepSeek provider. Set DEEPSEEK_API_KEY or add apiKey to config.");
     this.client = new OpenAI({
       apiKey: options.apiKey,
-      baseURL: options.baseUrl,
+      baseURL: options.baseUrl ?? "https://api.deepseek.com",
     });
   }
 
   setModel(modelId: string): void {
     this.id = modelId;
-    this.capabilities = OPENAI_COMPAT_MODELS[modelId] ?? DEFAULT_CAPABILITIES;
-  }
-
-  private isKimiK26(): boolean {
-    return this.id === "kimi-k2.6";
-  }
-
-  private needsThinkingDefault(): boolean {
-    return this.isKimiK26() || this.id.startsWith("kimi-k2");
-  }
-
-  private getThinkingDefault(): Record<string, unknown> | null {
-    if (this.isKimiK26()) {
-      return { type: "enabled", keep: "all" };
-    }
-    if (this.id.startsWith("kimi-k2")) {
-      return { type: "enabled" };
-    }
-    return null;
+    this.capabilities = DEEPSEEK_MODELS[modelId] ?? DEEPSEEK_MODELS[DEFAULT_MODEL];
   }
 
   async chat(messages: Message[], options?: ChatOptions, signal?: AbortSignal): Promise<ChatResponse> {
@@ -138,24 +98,14 @@ export class OpenAICompatAdapter implements ModelAdapter {
       model: options?.model ?? this.id,
       messages: this.convertMessages(messages),
       max_tokens: options?.maxTokens ?? this.capabilities.maxTokens,
-      temperature: options?.temperature,
       tools: options?.tools ? this.convertTools(options.tools) : undefined,
     };
 
-    if (options?.thinking || options?.reasoningEffort || this.needsThinkingDefault()) {
-      params.extra_body = {};
-      if (options?.thinking) {
-        (params.extra_body as Record<string, unknown>).thinking = options.thinking;
-      } else {
-        const defaultThinking = this.getThinkingDefault();
-        if (defaultThinking) {
-          (params.extra_body as Record<string, unknown>).thinking = defaultThinking;
-        }
-      }
-      if (options?.reasoningEffort) {
-        (params.extra_body as Record<string, unknown>).reasoning_effort = options.reasoningEffort;
-      }
-    }
+    params.extra_body = {};
+    (params.extra_body as Record<string, unknown>).thinking =
+      options?.thinking ?? THINKING_DEFAULT;
+    (params.extra_body as Record<string, unknown>).reasoning_effort =
+      options?.reasoningEffort ?? REASONING_EFFORT_DEFAULT;
 
     if (options?.responseFormat) {
       params.response_format = options.responseFormat;
@@ -174,19 +124,12 @@ export class OpenAICompatAdapter implements ModelAdapter {
     const raw = choice.message as unknown as Record<string, unknown>;
     const reasoningContent = (raw.reasoning_content as string) ?? "";
     let content = choice.message.content ?? "";
-    const strippedContent = stripThinkTags(content);
-    const thinkContent = strippedContent.thinkContent;
-    content = strippedContent.cleanContent;
-
-    // If content was wrapped in  tags (e.g. DeepSeek R1 style without reasoning_content),
-    // yield the think content as reasoning for the UI to render specially
-    // The final content stored should be the clean content without  tags
-
-    const mergedReasoningContent = [reasoningContent, thinkContent].filter(Boolean).join("\n");
+    const stripped = stripThinkTags(content);
+    const mergedReasoning = [reasoningContent, stripped.thinkContent].filter(Boolean).join("\n");
 
     return {
-      content,
-      reasoningContent: mergedReasoningContent || undefined,
+      content: stripped.cleanContent,
+      reasoningContent: mergedReasoning || undefined,
       toolCalls: tc.map((t) => ({
         id: t.id,
         name: t.function.name,
@@ -197,8 +140,7 @@ export class OpenAICompatAdapter implements ModelAdapter {
         buildUsage(response.usage ?? {}),
         this.capabilities.contextWindow,
         response.model,
-        this.provider,
-        options?.reasoningEffort,
+        options?.reasoningEffort ?? REASONING_EFFORT_DEFAULT,
       ),
     };
   }
@@ -208,25 +150,15 @@ export class OpenAICompatAdapter implements ModelAdapter {
       model: options?.model ?? this.id,
       messages: this.convertMessages(messages),
       max_tokens: options?.maxTokens ?? this.capabilities.maxTokens,
-      temperature: options?.temperature,
       tools: options?.tools ? this.convertTools(options.tools) : undefined,
       stream: true,
     };
 
-    if (options?.thinking || options?.reasoningEffort || this.needsThinkingDefault()) {
-      params.extra_body = {};
-      if (options?.thinking) {
-        (params.extra_body as Record<string, unknown>).thinking = options.thinking;
-      } else {
-        const defaultThinking = this.getThinkingDefault();
-        if (defaultThinking) {
-          (params.extra_body as Record<string, unknown>).thinking = defaultThinking;
-        }
-      }
-      if (options?.reasoningEffort) {
-        (params.extra_body as Record<string, unknown>).reasoning_effort = options.reasoningEffort;
-      }
-    }
+    params.extra_body = {};
+    (params.extra_body as Record<string, unknown>).thinking =
+      options?.thinking ?? THINKING_DEFAULT;
+    (params.extra_body as Record<string, unknown>).reasoning_effort =
+      options?.reasoningEffort ?? REASONING_EFFORT_DEFAULT;
 
     if (options?.responseFormat) {
       params.response_format = options.responseFormat;
@@ -240,7 +172,6 @@ export class OpenAICompatAdapter implements ModelAdapter {
       { signal },
     );
 
-    // Accumulate streaming tool call fragments
     const toolCallMap = new Map<number, { id: string; name: string; arguments: string }>();
     let modelName = this.id;
     let finishReason = "stop";
@@ -319,7 +250,6 @@ export class OpenAICompatAdapter implements ModelAdapter {
       yield { type: thinkMode ? "reasoning-delta" : "text-delta", text: thinkBuffer };
     }
 
-    // Emit accumulated tool calls
     for (const [, tc] of toolCallMap) {
       yield {
         type: "tool-call",
@@ -335,8 +265,7 @@ export class OpenAICompatAdapter implements ModelAdapter {
       buildUsage({ prompt_tokens: inputTokens, completion_tokens: outputTokens }),
       this.capabilities.contextWindow,
       modelName,
-      this.provider,
-      options?.reasoningEffort,
+      options?.reasoningEffort ?? REASONING_EFFORT_DEFAULT,
     );
     this.lastUsage = usage;
     yield {
@@ -362,14 +291,14 @@ export class OpenAICompatAdapter implements ModelAdapter {
                 : msg.content.map((p) => (p.type === "text" ? p.text : "")).join(""),
           };
         case "user": {
-          const userContent = this.mapContent(msg.content);
-          return { role: "user", content: userContent };
+          const userContent = typeof msg.content === "string" ? msg.content : msg.content;
+          return { role: "user", content: userContent as string | OpenAI.ChatCompletionContentPart[] };
         }
         case "assistant": {
           const assistantContent = msg.content
             ? typeof msg.content === "string"
               ? msg.content
-              : this.mapContentParts(msg.content)
+              : msg.content
             : null;
           const msgBase: Record<string, unknown> = {
             role: "assistant",
@@ -407,17 +336,5 @@ export class OpenAICompatAdapter implements ModelAdapter {
         ...(t.strict !== undefined ? { strict: t.strict } : {}),
       },
     }));
-  }
-
-  private mapContent(content: string | ContentPart[]): string | OpenAI.ChatCompletionContentPart[] {
-    if (typeof content === "string") return content;
-    return this.mapContentParts(content);
-  }
-
-  private mapContentParts(parts: ContentPart[]): OpenAI.ChatCompletionContentPart[] {
-    return parts.map((p) => {
-      if (p.type === "text") return p as OpenAI.ChatCompletionContentPartText;
-      return p as OpenAI.ChatCompletionContentPartImage;
-    });
   }
 }

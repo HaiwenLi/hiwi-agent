@@ -43,7 +43,7 @@ describe("core tools registration", () => {
 });
 
 describe("extra tools registration", () => {
-  it("registers all 9 extra tools", () => {
+  it("registers all 10 extra tools", () => {
     const registry = new ToolRegistry();
     registerExtraTools(registry);
     const names = registry.list().map((t) => t.name);
@@ -51,13 +51,14 @@ describe("extra tools registration", () => {
     expect(names).toContain("academic_search");
     expect(names).toContain("apply_patch");
     expect(names).toContain("git");
+    expect(names).toContain("read_image");
     expect(names).toContain("web_fetch");
     expect(names).toContain("web_search");
     expect(names).toContain("repo_overview");
     expect(names).toContain("question");
     expect(names).toContain("todo");
     expect(names).toContain("lsp");
-    expect(names).toHaveLength(9);
+    expect(names).toHaveLength(10);
   });
 
   it("all extra tools have valid schemas", () => {
@@ -75,23 +76,23 @@ describe("extra tools registration", () => {
 });
 
 describe("combined tools registration", () => {
-  it("registers all 15 tools together without conflicts", () => {
+  it("registers all 16 tools together without conflicts", () => {
     const registry = new ToolRegistry();
     registerCoreTools(registry);
     registerExtraTools(registry);
     const names = registry.list().map((t) => t.name);
 
-    expect(names).toHaveLength(15);
+    expect(names).toHaveLength(16);
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it("all 15 tools produce valid tool definitions for model", () => {
+  it("all 16 tools produce valid tool definitions for model", () => {
     const registry = new ToolRegistry();
     registerCoreTools(registry);
     registerExtraTools(registry);
     const defs = registry.toToolDefinitions();
 
-    expect(defs).toHaveLength(15);
+    expect(defs).toHaveLength(16);
     for (const def of defs) {
       expect(def.name).toBeTruthy();
       expect(def.description).toBeTruthy();

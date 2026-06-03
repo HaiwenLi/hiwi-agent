@@ -111,6 +111,21 @@ export class SessionStore {
       .run(new Date().toISOString(), id);
   }
 
+  deleteSession(id: string): boolean {
+    const existing = this.db
+      .prepare("SELECT id FROM sessions WHERE id = ?")
+      .get(id) as { id: string } | undefined;
+    if (!existing) return false;
+
+    const del = this.db.transaction(() => {
+      this.db.prepare("DELETE FROM messages WHERE session_id = ?").run(id);
+      this.db.prepare("DELETE FROM summaries WHERE session_id = ?").run(id);
+      this.db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
+    });
+    del();
+    return true;
+  }
+
   appendMessage(sessionId: string, role: string, content: string, tokens: number): void {
     const now = new Date().toISOString();
     this.db

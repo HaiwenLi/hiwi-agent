@@ -21,6 +21,7 @@ import {
   createMemorySearchTool,
 } from "./memory-tools.js";
 import { createQuestionTool } from "./question.js";
+import { createReadImageTool } from "./read-image.js";
 import { createReadTool } from "./read.js";
 import { createRepoOverviewTool } from "./repo-overview.js";
 import { createSkillExecuteTool, createSkillListTool } from "./skill-tools.js";
@@ -50,6 +51,7 @@ export function registerExtraTools(registry: ToolRegistry): void {
   registry.register(createQuestionTool());
   registry.register(createTodoTool());
   registry.register(createLspTool());
+  registry.register(createReadImageTool());
 }
 
 export function registerAgentTools(
@@ -103,4 +105,5 @@ export {
   createSkillExecuteTool,
   createSkillListTool,
   createSubagentTool,
+  createReadImageTool,
 };

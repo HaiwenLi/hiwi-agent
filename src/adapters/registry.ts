@@ -1,10 +1,29 @@
-import type { AgentConfig, ModelAdapter, ModelEntry, ModelInfo, ProviderConfig } from "../types.js";
-import { AnthropicAdapter } from "./anthropic.js";
-import { MiniMaxAdapter } from "./minimax.js";
+import type {
+  AgentConfig,
+  ModelAdapter,
+  ModelCapabilities,
+  ModelEntry,
+  ModelInfo,
+  ProviderConfig,
+} from "../types.js";
+import { AnthropicAdapter, ANTHROPIC_MODELS } from "./anthropic.js";
+import { DeepSeekAdapter, DEEPSEEK_MODELS } from "./deepseek.js";
+import { MiniMaxAdapter, MINIMAX_MODELS } from "./minimax.js";
 import { type ProviderModelCatalog, buildCatalog } from "./model-catalog.js";
-import { OllamaAdapter } from "./ollama.js";
-import { OpenAICompatAdapter } from "./openai-compat.js";
-import { ZhipuAdapter } from "./zhipu.js";
+import { OllamaAdapter, OLLAMA_MODELS } from "./ollama.js";
+import { OpenAIAdapter, OPENAI_MODELS } from "./openai.js";
+import { OpenAICompatAdapter, OPENAI_COMPAT_MODELS } from "./openai-compat.js";
+import { ZhipuAdapter, ZHIPU_MODELS } from "./zhipu.js";
+
+const ALL_CAPABILITIES: Record<string, ModelCapabilities> = {
+  ...DEEPSEEK_MODELS,
+  ...OPENAI_MODELS,
+  ...ANTHROPIC_MODELS,
+  ...MINIMAX_MODELS,
+  ...OLLAMA_MODELS,
+  ...OPENAI_COMPAT_MODELS,
+  ...ZHIPU_MODELS,
+};
 
 export class ProviderRegistry {
   private adapters = new Map<string, ModelAdapter>();
@@ -45,6 +64,9 @@ export class ProviderRegistry {
 
   setModel(modelId: string): void {
     this.activeModel = modelId;
+    for (const adapter of this.adapters.values()) {
+      adapter.setModel?.(modelId);
+    }
   }
 
   updateProviderConfig(providerName: string, config: ProviderConfig): void {
@@ -79,11 +101,41 @@ export class ProviderRegistry {
   }
 
   listModels(): ModelInfo[] {
-    return Array.from(this.adapters.entries()).map(([, adapter]) => ({
-      id: adapter.id,
-      provider: adapter.provider,
-      capabilities: adapter.capabilities,
-    }));
+    const seen = new Set<string>();
+    const result: ModelInfo[] = [];
+
+    for (const [provider, models] of Object.entries(this.modelCatalog)) {
+      for (const model of models) {
+        seen.add(model.id);
+        result.push({
+          id: model.id,
+          provider,
+          capabilities: ALL_CAPABILITIES[model.id] ?? {
+            tools: true,
+            vision: false,
+            maxTokens: 16384,
+            contextWindow: 128_000,
+          },
+        });
+      }
+    }
+
+    for (const [provider, adapter] of this.adapters.entries()) {
+      if (!seen.has(adapter.id)) {
+        const providerModels = this.modelCatalog[provider];
+        const belongsToProvider =
+          providerModels?.some((m) => m.id === adapter.id) ?? false;
+        if (!belongsToProvider && providerModels?.length) continue;
+        seen.add(adapter.id);
+        result.push({
+          id: adapter.id,
+          provider: adapter.provider,
+          capabilities: adapter.capabilities,
+        });
+      }
+    }
+
+    return result;
   }
 
   createAdapter(providerName: string): ModelAdapter {
@@ -92,6 +144,14 @@ export class ProviderRegistry {
     const baseUrl = providerConfig.baseUrl;
 
     switch (providerName) {
+      case "deepseek":
+        if (!apiKey) throw new Error(`No API key for provider: ${providerName}`);
+        return new DeepSeekAdapter({ apiKey, baseUrl, model: this.activeModel });
+
+      case "openai":
+        if (!apiKey) throw new Error(`No API key for provider: ${providerName}`);
+        return new OpenAIAdapter({ apiKey, baseUrl, model: this.activeModel });
+
       case "anthropic":
         if (!apiKey) throw new Error(`No API key for provider: ${providerName}`);
         return new AnthropicAdapter({ apiKey, model: this.activeModel });

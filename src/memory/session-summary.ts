@@ -34,7 +34,10 @@ export class SessionSummarizer {
       return ok(null);
     }
 
-    const conversation = messages.map((m) => `${m.role}: ${m.content}`).join("\n");
+    const conversation = messages.map((m) => {
+      const content = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+      return `${m.role}: ${content}`;
+    }).join("\n");
 
     try {
       const response = await this.llm.chat([

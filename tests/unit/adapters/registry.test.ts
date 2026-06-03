@@ -53,12 +53,12 @@ describe("ProviderRegistry", () => {
     expect(registry.getActiveModel()).toBe("model-b");
   });
 
-  it("lists registered models", () => {
+  it("lists registered models from catalog and adapters", () => {
     const mock = new MockAdapter([], { id: "test-model", provider: "test" });
     registry.registerAdapter("test", mock);
     const models = registry.listModels();
-    expect(models).toHaveLength(1);
-    expect(models[0].id).toBe("test-model");
+    expect(models.length).toBeGreaterThanOrEqual(1);
+    expect(models.some((m) => m.id === "test-model")).toBe(true);
   });
 
   it("throws when no adapter registered for active provider", () => {

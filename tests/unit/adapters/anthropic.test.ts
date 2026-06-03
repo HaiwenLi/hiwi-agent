@@ -33,7 +33,10 @@ describe("AnthropicAdapter", () => {
 
     expect(resp.content).toBe("Hello!");
     expect(resp.finishReason).toBe("stop");
-    expect(resp.usage).toEqual({ inputTokens: 10, outputTokens: 5 });
+    expect(resp.usage.inputTokens).toBe(10);
+    expect(resp.usage.outputTokens).toBe(5);
+    expect(resp.usage.contextWindow).toBeGreaterThan(0);
+    expect(resp.usage.contextPercent).toBeDefined();
   });
 
   it("handles tool use responses", async () => {

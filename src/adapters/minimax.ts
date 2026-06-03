@@ -1,16 +1,18 @@
 import type {
-  TokenUsage,
   ChatOptions,
   ChatResponse,
+  ContentPart,
   Message,
   ModelAdapter,
   ModelCapabilities,
   StreamChunk,
+  TokenUsage,
   ToolCall,
   ToolDefinition,
 } from "../types.js";
 
 export const MINIMAX_MODELS: Record<string, ModelCapabilities> = {
+  "MiniMax-M3": { tools: true, vision: true, maxTokens: 64_000, contextWindow: 1_000_000 },
   "MiniMax-M2.7": { tools: true, vision: true, maxTokens: 131_000, contextWindow: 205_000 },
   "MiniMax-M2.7-highspeed": {
     tools: true,
@@ -19,12 +21,37 @@ export const MINIMAX_MODELS: Record<string, ModelCapabilities> = {
     contextWindow: 205_000,
   },
   "MiniMax-M2.5": { tools: true, vision: true, maxTokens: 131_000, contextWindow: 205_000 },
-  "MiniMax-M2.1": { tools: true, vision: false, maxTokens: 8192, contextWindow: 200_000 },
-  "abab6.5s-chat": { tools: true, vision: false, maxTokens: 4096, contextWindow: 200_000 },
-  "abab6.5g-chat": { tools: true, vision: false, maxTokens: 4096, contextWindow: 200_000 },
+  "MiniMax-M2.5-highspeed": {
+    tools: true,
+    vision: true,
+    maxTokens: 131_000,
+    contextWindow: 205_000,
+  },
+  "MiniMax-M2.1": { tools: true, vision: false, maxTokens: 8_192, contextWindow: 200_000 },
+  "MiniMax-M2.1-highspeed": {
+    tools: true,
+    vision: false,
+    maxTokens: 8_192,
+    contextWindow: 200_000,
+  },
+  "MiniMax-M2": { tools: true, vision: false, maxTokens: 8_192, contextWindow: 200_000 },
 };
 
-const DEFAULT_MODEL = "MiniMax-M2.7";
+const DEFAULT_MODEL = "MiniMax-M3";
+
+function lookupMiniMax(id: string): ModelCapabilities | undefined {
+  if (MINIMAX_MODELS[id]) return MINIMAX_MODELS[id];
+  const lower = id.toLowerCase();
+  for (const [key, caps] of Object.entries(MINIMAX_MODELS)) {
+    if (key.toLowerCase() === lower) return caps;
+  }
+  return undefined;
+}
+
+// OpenAI-compatible base URL (used for both Token Plan and pay-as-you-go)
+export const MINIMAX_OPENAI_BASE_URL = "https://api.minimaxi.com/v1";
+// Anthropic-compatible base URL (for Claude Code etc.)
+export const MINIMAX_ANTHROPIC_BASE_URL = "https://api.minimaxi.com/anthropic";
 
 export class MiniMaxAdapter implements ModelAdapter {
   readonly id: string;
@@ -43,12 +70,12 @@ export class MiniMaxAdapter implements ModelAdapter {
     if (base.endsWith("/v1") || base.endsWith("/v1/")) {
       base = base.replace(/\/v1\/?$/, "");
     }
-    this.baseUrl = base + "/v1/chat/completions";
+    this.baseUrl = `${base}/v1/chat/completions`;
     this.id = config.model ?? DEFAULT_MODEL;
-    this.capabilities = MINIMAX_MODELS[this.id] ?? MINIMAX_MODELS[DEFAULT_MODEL];
+    this.capabilities = lookupMiniMax(this.id) ?? MINIMAX_MODELS[DEFAULT_MODEL];
   }
 
-  async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+  async chat(messages: Message[], options?: ChatOptions, signal?: AbortSignal): Promise<ChatResponse> {
     const body: Record<string, unknown> = {
       model: options?.model ?? this.id,
       messages: this.convertMessages(messages),
@@ -58,6 +85,20 @@ export class MiniMaxAdapter implements ModelAdapter {
     if (options?.tools?.length) {
       body.tools = this.convertTools(options.tools);
     }
+    if (options?.responseFormat) {
+      body.response_format = options.responseFormat;
+    }
+    if (options?.toolChoice) {
+      body.tool_choice = options.toolChoice;
+    }
+    if (options?.thinking) {
+      body.thinking = options.thinking;
+    } else if (this.id.startsWith("MiniMax-M3")) {
+      body.thinking = { type: "adaptive" };
+    }
+    if (options?.reasoningEffort) {
+      body.reasoning_effort = options.reasoningEffort;
+    }
 
     const response = await fetch(this.baseUrl, {
       method: "POST",
@@ -66,6 +107,7 @@ export class MiniMaxAdapter implements ModelAdapter {
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(body),
+      signal,
     });
 
     if (!response.ok) {
@@ -91,7 +133,13 @@ export class MiniMaxAdapter implements ModelAdapter {
         };
         finish_reason: string;
       }>;
-      usage?: { prompt_tokens: number; completion_tokens: number };
+      model?: string;
+      usage?: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        prompt_cache_hit_tokens?: number;
+        prompt_cache_miss_tokens?: number;
+      };
     };
 
     const choice = data.choices[0];
@@ -101,18 +149,31 @@ export class MiniMaxAdapter implements ModelAdapter {
       input: JSON.parse(tc.function.arguments),
     }));
 
+    const inputTk = data.usage?.prompt_tokens ?? 0;
+    const outputTk = data.usage?.completion_tokens ?? 0;
+
     return {
       content: choice?.message?.content ?? "",
       toolCalls,
       finishReason: choice?.finish_reason === "tool_calls" ? "tool-calls" : "stop",
       usage: {
-        inputTokens: data.usage?.prompt_tokens ?? 0,
-        outputTokens: data.usage?.completion_tokens ?? 0,
+        inputTokens: inputTk,
+        outputTokens: outputTk,
+        cacheReadTokens: data.usage?.prompt_cache_hit_tokens,
+        cacheWriteTokens: data.usage?.prompt_cache_miss_tokens,
+        contextWindow: this.capabilities.contextWindow,
+        contextPercent:
+          this.capabilities.contextWindow > 0
+            ? Math.round((inputTk / this.capabilities.contextWindow) * 100)
+            : null,
+        modelName: data.model ?? this.id,
+        provider: this.provider,
+        thinkingEffort: options?.reasoningEffort,
       },
     };
   }
 
-  async *stream(messages: Message[], options?: ChatOptions): AsyncIterable<StreamChunk> {
+  async *stream(messages: Message[], options?: ChatOptions, signal?: AbortSignal): AsyncIterable<StreamChunk> {
     const body: Record<string, unknown> = {
       model: options?.model ?? this.id,
       messages: this.convertMessages(messages),
@@ -123,6 +184,20 @@ export class MiniMaxAdapter implements ModelAdapter {
     };
     if (options?.tools?.length) {
       body.tools = this.convertTools(options.tools);
+    }
+    if (options?.responseFormat) {
+      body.response_format = options.responseFormat;
+    }
+    if (options?.toolChoice) {
+      body.tool_choice = options.toolChoice;
+    }
+    if (options?.thinking) {
+      body.thinking = options.thinking;
+    } else if (this.id.startsWith("MiniMax-M3")) {
+      body.thinking = { type: "adaptive" };
+    }
+    if (options?.reasoningEffort) {
+      body.reasoning_effort = options.reasoningEffort;
     }
 
     if (process.env.DEBUG) {
@@ -136,6 +211,7 @@ export class MiniMaxAdapter implements ModelAdapter {
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(body),
+      signal,
     });
 
     if (!response.ok) {
@@ -149,8 +225,10 @@ export class MiniMaxAdapter implements ModelAdapter {
 
     const toolCallMap = new Map<number, { id: string; name: string; arguments: string }>();
     let finishReason = "stop";
+    let modelName = this.id;
     let inputTokens = 0;
     let outputTokens = 0;
+    let cacheHitTokens = 0;
     let totalContentLen = 0; // for fallback token estimation
     // MiniMax returns thinking content as <think> XML tags within the content field
     let inThinkTag = false;
@@ -173,7 +251,7 @@ export class MiniMaxAdapter implements ModelAdapter {
 
         try {
           if (process.env.DEBUG) {
-            process.stdout.write("[MiniMax] Raw chunk: " + data + "\n");
+            process.stdout.write(`[MiniMax] Raw chunk: ${data}\n`);
           }
 
           let parsed: {
@@ -190,7 +268,11 @@ export class MiniMaxAdapter implements ModelAdapter {
               };
               finish_reason?: string | null;
             }>;
-            usage?: { prompt_tokens: number; completion_tokens: number };
+            usage?: {
+              prompt_tokens: number;
+              completion_tokens: number;
+              prompt_cache_hit_tokens?: number;
+            };
           };
           try {
             parsed = JSON.parse(data);
@@ -202,6 +284,10 @@ export class MiniMaxAdapter implements ModelAdapter {
 
           const choice = parsed.choices?.[0];
           if (!choice) continue;
+
+          if ((parsed as any).model) {
+            modelName = (parsed as any).model as string;
+          }
 
           const delta = choice.delta;
 
@@ -281,9 +367,15 @@ export class MiniMaxAdapter implements ModelAdapter {
           if (parsed.usage) {
             inputTokens = parsed.usage.prompt_tokens;
             outputTokens = parsed.usage.completion_tokens;
+            cacheHitTokens = parsed.usage.prompt_cache_hit_tokens ?? 0;
           }
         } catch (err) {
-          console.error("[MiniMax] Stream processing error:", err instanceof Error ? err.message : String(err), "Data was:", data?.slice(0, 200));
+          console.error(
+            "[MiniMax] Stream processing error:",
+            err instanceof Error ? err.message : String(err),
+            "Data was:",
+            data?.slice(0, 200),
+          );
           // skip invalid chunks
         }
       }
@@ -300,11 +392,24 @@ export class MiniMaxAdapter implements ModelAdapter {
       };
     }
 
-		this.lastUsage = { inputTokens, outputTokens };
+    const usage: TokenUsage = {
+      inputTokens,
+      outputTokens,
+      cacheReadTokens: cacheHitTokens > 0 ? cacheHitTokens : undefined,
+      contextWindow: this.capabilities.contextWindow,
+      contextPercent:
+        this.capabilities.contextWindow > 0
+          ? Math.round((inputTokens / this.capabilities.contextWindow) * 100)
+          : null,
+      modelName,
+      provider: this.provider,
+      thinkingEffort: options?.reasoningEffort,
+    };
+    this.lastUsage = usage;
     yield {
       type: "finish",
       finishReason: finishReason === "tool_calls" ? "tool-calls" : "stop",
-      usage: { inputTokens, outputTokens },
+      usage,
     };
   }
 
@@ -320,6 +425,9 @@ export class MiniMaxAdapter implements ModelAdapter {
             role: "assistant",
             content: msg.content || null,
           };
+          if (msg.reasoningContent) {
+            result.reasoning_content = msg.reasoningContent;
+          }
           if (msg.toolCalls?.length) {
             result.tool_calls = msg.toolCalls.map((tc) => ({
               id: tc.id,
@@ -343,16 +451,17 @@ export class MiniMaxAdapter implements ModelAdapter {
   }
 
   getUsage(): TokenUsage | undefined {
-	    return this.lastUsage;
-	  }
+    return this.lastUsage;
+  }
 
-	  private convertTools(tools: ToolDefinition[]): unknown[] {
+  private convertTools(tools: ToolDefinition[]): unknown[] {
     return tools.map((t) => ({
       type: "function",
       function: {
         name: t.name,
         description: t.description,
         parameters: t.inputSchema,
+        ...(t.strict !== undefined ? { strict: t.strict } : {}),
       },
     }));
   }

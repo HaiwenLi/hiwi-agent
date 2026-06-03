@@ -124,6 +124,63 @@ describe("REPL", () => {
     expect(result).toBe("exit");
   });
 
+  it("repl.pause() pauses the current agent loop", async () => {
+    const chatAdapter = new MockAdapter(
+      [
+        {
+          content: "A long streaming response that should pause mid-way",
+          toolCalls: [],
+          finishReason: "stop",
+        },
+      ],
+      { streamDelay: 5 },
+    );
+    deps.adapter = chatAdapter;
+    deps.providerRegistry.getActiveAdapter = () => chatAdapter;
+    deps.loopConfig = { ...LOOP_CONFIG, streaming: true };
+
+    const repl = new REPL(deps);
+
+    // Start chat in background
+    const chatPromise = repl.processInput("Hello");
+
+    // Give it a moment to start streaming, then pause
+    await new Promise((r) => setTimeout(r, 2));
+    repl.pause();
+
+    const result = await chatPromise;
+    // Should return partial content even though paused
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it("pausing during chat preserves partial messages", async () => {
+    const chatAdapter = new MockAdapter(
+      [
+        {
+          content: "This is partial content that gets interrupted",
+          toolCalls: [],
+          finishReason: "stop",
+        },
+      ],
+      { streamDelay: 5 },
+    );
+    deps.adapter = chatAdapter;
+    deps.providerRegistry.getActiveAdapter = () => chatAdapter;
+    deps.loopConfig = { ...LOOP_CONFIG, streaming: true };
+
+    const repl = new REPL(deps);
+
+    const chatPromise = repl.processInput("Hello");
+
+    await new Promise((r) => setTimeout(r, 2));
+    repl.pause();
+
+    await chatPromise;
+
+    // The session store should have been updated with partial content
+    expect(deps.sessionStore.appendMessage).toHaveBeenCalled();
+  });
+
   it("accumulates conversation history across turns", async () => {
     const chatAdapter = new MockAdapter([
       { content: "First response", toolCalls: [], finishReason: "stop" },
