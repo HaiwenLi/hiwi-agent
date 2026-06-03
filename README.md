@@ -5,8 +5,8 @@ Personal AI agent with persistent memory, multi-model support, and reusable skil
 ## Features
 
 - **Hybrid Memory** — MEMORY.md index + mem0 semantic search with local Ollama embeddings
-- **Multi-Provider** — Anthropic, OpenAI, DeepSeek, Ollama, Zhipu, Kimi, MiniMax via unified adapter interface with reasoning/thinking support, structured JSON output, and tool_choice across all providers
-- **Vision Support** — Multimodal image input via `ContentPart[]` message format, `read_image` tool with base64 encoding, and automatic content-parts bridge from tool results to model
+- **Multi-Provider** — DeepSeek, OpenAI, Anthropic, Kimi, Zhipu (GLM), MiniMax, Ollama via dedicated adapters with thinking/reasoning, structured JSON output, and tool_choice
+- **Vision Support** — Multimodal image input via `ContentPart[]` message format, `read_image` tool with base64 encoding, and content-parts injection pipeline from tool results to model
 - **Skill System** — Markdown-based SKILL.md files with frontmatter, supports domain/workflow/meta skill types
 - **Terminal UI** — pi-based differential rendering engine with animated thinking loader, streaming markdown output, reasoning display (collapsible), slash-command popup, and token usage status bar
 - **MCP Server** — Can run as an MCP server (stdio or SSE) for other agents to connect
@@ -137,7 +137,8 @@ hiwi-agent --debug      # Debug logging (raw API chunks)
 | `/recall <query>` | Semantic search across memories |
 | `/forget <name>` | Delete a memory |
 | `/skills` | List loaded skills |
-| `/sessions` | List sessions |
+| `/sessions` | List sessions with IDs |
+| `/sessions delete <id>` | Delete a session and its messages |
 | `/yolo` | Toggle YOLO permission mode |
 | `/test <provider?>` | Test connection to provider |
 | `/new` | Start a new session |
@@ -167,7 +168,8 @@ The TUI supports real-time streaming with visual separation of thinking and mode
 
 - **Streaming markdown** — Model output is rendered incrementally via `onStreamChunk` with full markdown parsing
 - **Thinking display** — Reasoning content shown in italic dim style, collapsible with `Ctrl+O`
-- **Animated loader** — Braille spinner during thinking phases, built on pi's `Loader` component pattern
+- **Output fold** — Assistant responses >50 rendered lines auto-fold to 15-line preview. First `Ctrl+O` expands the most recent folded output, subsequent toggles thinking panel
+- **Animated loader** — Braille spinner during thinking phases
 - **Thinking effort** — Configurable via `/effort` command (low/medium/high/max) or `thinkingEffort` in config. Shown in status bar as `[effort]`
 - **Default thinking** — Automatically enabled for DeepSeek and Kimi K2.x models. DeepSeek defaults to `reasoning_effort: "high"`
 - **Multi-turn reasoning** — `reasoning_content` is persisted across turns and passed back to DeepSeek API (required to avoid 400 errors)
@@ -176,11 +178,24 @@ The TUI supports real-time streaming with visual separation of thinking and mode
 
 | Adapter | Reasoning Mechanism |
 |---------|-------------------|
+| DeepSeek | `reasoning_content` in delta + `<think>` XML tag parsing + `extra_body.thinking` |
+| OpenAI | Standard chat completions (no reasoning) |
 | Anthropic | `thinking_delta` SDK event |
-| OpenAI-compat (DeepSeek, Kimi, GPT) | `reasoning_content` in delta + `<think>` XML tag parsing in content |
+| Kimi (openai-compat) | `reasoning_content` in delta + `extra_body.thinking` with `keep:all` |
 | Zhipu (GLM) | `reasoning_content` in delta |
-| MiniMax | `reasoning_content` in delta + `<think>` XML tag parsing in content |
+| MiniMax | `reasoning_content` in delta + `<think>` XML tag parsing |
 | Ollama | `reasoning_content` in message/delta |
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Submit input |
+| `Esc` | Pause running agent (during processing) |
+| `Ctrl+O` | Toggle: expand folded output → toggle thinking panel |
+| `Tab` | Select next popup suggestion |
+| `↑` / `↓` | Navigate popup (slash commands) |
+| `/` | Activate slash-command popup |
 
 ## Structured Output
 
@@ -198,7 +213,7 @@ Vision-capable models can process images via the `read_image` tool or programmat
 
 - **Content parts** — `Message.content` supports `string | ContentPart[]` where `ContentPart` is `{ type: "text", text } | { type: "image_url", image_url: { url, detail? } }`
 - **read_image tool** — Reads image files from disk, detects MIME type, encodes as base64 data URL, and returns content parts for the next model turn via `ToolResult.contentParts`
-- **Content bridge** — When a `ToolResult` includes `contentParts`, the agent loop automatically pushes a `user` message with those parts (instead of a `tool` message), enabling the vision model to "see" the image
+- **Content bridge** — When a `ToolResult` includes `contentParts`, the agent loop pushes a `tool` message (for API compliance) followed by a `user` message with the content parts, enabling the vision model to "see" the image
 - **Adapter formats** — OpenAI-compat providers use `image_url` content parts; Anthropic translates to `{ type: "image", source: { type: "base64", media_type, data } }`; Ollama collects image data into the `images` array
 
 ## Memory System
@@ -232,8 +247,9 @@ Hybrid architecture combining a hand-editable Markdown index with vector-based s
 hiwi-agent/
 ├── src/
 │   ├── core/           # Agent loop, tool registry, config
-│   ├── adapters/       # Model providers (all with reasoning_content + structured output)
-│   │                   #   Anthropic, OpenAI-compat, Zhipu, MiniMax, Ollama, Mock
+│   ├── adapters/       # Dedicated adapters per provider
+│   │                   #   DeepSeek (thinking defaults), OpenAI, Anthropic,
+│   │                   #   OpenAI-compat (Kimi/abab), Zhipu, MiniMax, Ollama, Mock
 │   ├── memory/         # MEMORY.md, mem0, compaction, auto-extraction
 │   ├── skills/         # SKILL.md loader, executor, composer, importer
 │   ├── tools/          # 21+ built-in tools (including read_image)
@@ -245,9 +261,10 @@ hiwi-agent/
 │   │   ├── utils.ts    # ANSI-aware text utilities
 │   │   └── keys.ts     # Keyboard input handling (Kitty protocol)
 │   └── cli/            # Terminal UI (ChatComponent), REPL, commands, pipe mode
-├── skills/             # Built-in skills (paper-search, code-review)
-├── config/             # Default configuration
-└── tests/              # 79 test files, 665 tests (unit + integration)
+├── docs/                # Documentation (model_comparison.md)
+├── skills/              # Built-in skills (paper-search, code-review)
+├── config/              # Default configuration
+└── tests/               # 81 test files, 683 tests (unit + integration)
 ```
 
 ## Development
