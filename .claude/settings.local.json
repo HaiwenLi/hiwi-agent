@@ -91,7 +91,9 @@
       "Bash(xargs grep -n \"message.*usage\")",
       "Bash(xargs grep -n \"console\\\\|log\")",
       "Bash(xargs grep -A5 -B5 \"complete.*function\\\\|complete.*command\")",
-      "Bash(rtk pnpm *)"
+      "Bash(rtk pnpm *)",
+      "Bash(rtk proxy *)",
+      "Bash(rtk npx *)"
     ]
   }
 }

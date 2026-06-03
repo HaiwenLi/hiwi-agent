@@ -42,7 +42,7 @@ describe("buildCatalog", () => {
     expect(catalog.zhipu.some((m) => m.id === "glm-4.7")).toBe(true);
 
     expect(catalog.ollama).toBeDefined();
-    expect(catalog.ollama.some((m) => m.id === "llama3")).toBe(true);
+    expect(catalog.ollama.some((m) => m.id === "qwen3.6")).toBe(true);
   });
 
   it("merges config overrides into catalog (adds custom models)", () => {

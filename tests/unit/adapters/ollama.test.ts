@@ -7,7 +7,7 @@ describe("OllamaAdapter", () => {
 
   beforeEach(() => {
     originalFetch = globalThis.fetch;
-    adapter = new OllamaAdapter({ baseUrl: "http://localhost:11434", model: "llama3" });
+    adapter = new OllamaAdapter({ baseUrl: "http://localhost:11434", model: "qwen3.6" });
   });
 
   afterEach(() => {
@@ -58,7 +58,7 @@ describe("OllamaAdapter", () => {
   });
 
   it("reports capabilities for known models", () => {
-    expect(adapter.id).toBe("llama3");
+    expect(adapter.id).toBe("qwen3.6");
     expect(adapter.provider).toBe("ollama");
     expect(adapter.capabilities.tools).toBe(true);
   });

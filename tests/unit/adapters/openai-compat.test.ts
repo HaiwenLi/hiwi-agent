@@ -134,7 +134,7 @@ describe("OpenAICompatAdapter", () => {
       usage: { prompt_tokens: 5, completion_tokens: 2 },
     });
 
-    const adapter = new OpenAICompatAdapter({ provider: "abab", apiKey: "sk-test", model: "abab-7" });
+    const adapter = new OpenAICompatAdapter({ provider: "custom", apiKey: "sk-test", model: "custom-model" });
     await adapter.chat([{ role: "user", content: "hi" }]);
 
     const callArgs = mockCreate.mock.calls[0][0];

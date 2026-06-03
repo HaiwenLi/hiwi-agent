@@ -138,7 +138,7 @@ describe("enrichUsage", () => {
       prompt_eval_count: 100,
       eval_count: 50,
     });
-    const result = enrichUsage(base, 0, "llama3", "ollama");
+    const result = enrichUsage(base, 0, "qwen3.6", "ollama");
     expect(result.contextPercent).toBeNull();
   });
 });

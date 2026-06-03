@@ -20,13 +20,7 @@ export const ZHIPU_MODELS: Record<string, ModelCapabilities> = {
   "glm-4.7-flash": { tools: true, vision: false, maxTokens: 128_000, contextWindow: 200_000 },
   "glm-4.6": { tools: true, vision: false, maxTokens: 128_000, contextWindow: 200_000 },
   "glm-4.5-air": { tools: true, vision: false, maxTokens: 96_000, contextWindow: 128_000 },
-  "glm-4.5-airx": { tools: true, vision: false, maxTokens: 96_000, contextWindow: 128_000 },
-  "glm-4-flash": { tools: true, vision: false, maxTokens: 4_096, contextWindow: 128_000 },
   "glm-4-plus": { tools: true, vision: false, maxTokens: 4_096, contextWindow: 128_000 },
-  "glm-4": { tools: true, vision: true, maxTokens: 4_096, contextWindow: 128_000 },
-  "glm-4v": { tools: false, vision: true, maxTokens: 4_096, contextWindow: 128_000 },
-  "glm-3-turbo": { tools: false, vision: false, maxTokens: 4_096, contextWindow: 128_000 },
-  "glm-turbo": { tools: false, vision: false, maxTokens: 4_096, contextWindow: 128_000 },
 };
 
 const DEFAULT_MODEL = "glm-5.1";

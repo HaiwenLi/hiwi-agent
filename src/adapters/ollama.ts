@@ -13,9 +13,8 @@ import type {
 import { buildNormalizedUsage, enrichUsage, extractText } from "./adapter-utils.js";
 
 export const OLLAMA_MODELS: Record<string, ModelCapabilities> = {
-  llama3: { tools: true, vision: false, maxTokens: 8192, contextWindow: 8192 },
   "llama3.1": { tools: true, vision: false, maxTokens: 32768, contextWindow: 128_000 },
-  "qwen2.5": { tools: true, vision: false, maxTokens: 8192, contextWindow: 32768 },
+  "qwen3.6": { tools: true, vision: false, maxTokens: 32768, contextWindow: 131_072 },
   mistral: { tools: true, vision: false, maxTokens: 8192, contextWindow: 32768 },
 };
 
@@ -34,7 +33,7 @@ export class OllamaAdapter implements ModelAdapter {
   private lastUsage: TokenUsage | undefined;
 
   constructor(options: { baseUrl?: string; model?: string }) {
-    this.id = options.model ?? "llama3";
+    this.id = options.model ?? "qwen3.6";
     this.baseUrl = options.baseUrl ?? "http://localhost:11434";
     this.capabilities = OLLAMA_MODELS[this.id] ?? DEFAULT_CAPABILITIES;
   }

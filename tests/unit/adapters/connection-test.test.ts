@@ -99,7 +99,7 @@ describe("testConnection", () => {
 
   it("tests a specific provider when specified", async () => {
     registry.registerAdapter("anthropic", createMockAdapter("opaque-model", "anthropic"));
-    registry.registerAdapter("ollama", createMockAdapter("llama3", "ollama"));
+    registry.registerAdapter("ollama", createMockAdapter("qwen3.6", "ollama"));
 
     const result = await testConnection(registry, "ollama");
 

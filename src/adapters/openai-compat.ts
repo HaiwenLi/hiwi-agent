@@ -13,7 +13,6 @@ import type {
 import { buildNormalizedUsage, createThinkContext, endsWithPartialTag, enrichUsage, processThinkStream, safeJsonParse, stripThinkTags } from "./adapter-utils.js";
 
 export const OPENAI_COMPAT_MODELS: Record<string, ModelCapabilities> = {
-  "abab-7": { tools: true, vision: false, maxTokens: 8_192, contextWindow: 128_000 },
 };
 
 const DEFAULT_CAPABILITIES: ModelCapabilities = {

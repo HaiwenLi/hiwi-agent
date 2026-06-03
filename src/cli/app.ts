@@ -121,7 +121,7 @@ class ChatComponent implements Component {
 
 	render(width: number): string[] {
 		const result: string[] = [];
-		const separator = `\x1b[90m${"─".repeat(width)}\x1b[0m`;
+		const separator = `\x1b[37m${"─".repeat(width)}\x1b[0m`;
 
 		// Output lines
 		for (const line of this.lines) {
@@ -170,7 +170,7 @@ class ChatComponent implements Component {
 		const promptWidth = visibleWidth(prompt.replace(/\x1b\[[0-9;]*m/g, ""));
 		const inputWidth = width - promptWidth;
 		const displayInput = truncateToWidth(this.input, inputWidth);
-		result.push(`${prompt}${displayInput}\x1b[90m█\x1b[0m`);
+		result.push(`${prompt}${displayInput}\x1b[37m█\x1b[0m`);
 
 		// Bottom separator
 		result.push(separator);
@@ -290,11 +290,8 @@ class ChatComponent implements Component {
           this.pickerIndex + 1,
         );
         this.pickerScrollOffset = Math.max(
-          0,
-          Math.min(
-            this.pickerScrollOffset,
-            this.pickerIndex - POPOUP_MAX_VISIBLE + 1,
-          ),
+          this.pickerScrollOffset,
+          this.pickerIndex - POPOUP_MAX_VISIBLE + 1,
         );
         this.requestRender();
         return;
@@ -349,7 +346,7 @@ class ChatComponent implements Component {
 			if (matchesKey(data, Key.down)) {
 				const filtered = this.getFilteredCommands();
 				this.popupIndex = Math.min(filtered.length - 1, this.popupIndex + 1);
-				this.popupScrollOffset = Math.max(0, Math.min(this.popupScrollOffset, this.popupIndex - POPOUP_MAX_VISIBLE + 1));
+				this.popupScrollOffset = Math.max(this.popupScrollOffset, this.popupIndex - POPOUP_MAX_VISIBLE + 1);
 				this.requestRender();
 				return;
 			}
@@ -427,9 +424,9 @@ class ChatComponent implements Component {
 
   private submitInput(): void {
     const text = this.input;
-    if (!text.trim()) return;
 
     // If awaiting inline input (e.g. API key), resolve the promise
+    // even for empty input (user pressing Enter to cancel)
     if (this.awaitingInput && this.pendingInputResolve) {
       this.input = "";
       this.awaitingInput = false;
@@ -440,6 +437,8 @@ class ChatComponent implements Component {
       resolve(text);
       return;
     }
+
+    if (!text.trim()) return;
 
     this.popupVisible = false;
     this.pushLine(text, "user");
@@ -597,16 +596,12 @@ class ChatComponent implements Component {
 	}
 
 	private submitPickerItem(item: PickerItem): void {
-		this.processing = true;
-		this.loader?.start();
-		this.requestRender();
+		// Don't set processing=true or start the loader here — picker items
+		// are slash commands (/model, /provider) that may need to prompt for
+		// input (e.g. API key). The loader would obscure the prompt.
 		this.callbacks.onInput(item.value).then(() => {
-			this.processing = false;
-			this.loader?.stop();
 			this.requestRender();
 		}).catch(() => {
-			this.processing = false;
-			this.loader?.stop();
 			this.requestRender();
 		});
 	}

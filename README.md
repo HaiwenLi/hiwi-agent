@@ -174,7 +174,7 @@ The TUI supports real-time streaming with visual separation of thinking and mode
 - **Default streaming** — Streaming always enabled for DeepSeek, Kimi, MiniMax, and Zhipu (GLM) models, regardless of config
 - **Default thinking** — Automatically enabled for DeepSeek, Kimi K2.x, GLM-5/4.7/4.6, and MiniMax-M3 models. DeepSeek defaults to `reasoning_effort: "high"`
 - **Multi-turn reasoning** — `reasoning_content` is persisted across turns and passed back to DeepSeek API (required to avoid 400 errors)
-- **Token tracking** — Input/output token counts with context window percentage in the status bar. Falls back to content-length estimation when the API doesn't return usage in streaming mode. Cache read/write tokens tracked for DeepSeek and Anthropic
+- **Token tracking** — Input (`↑`), output (`↓`), cache read (`↗`), and cache write (`↘`) tokens with context window percentage in the status bar. `totalTokens` includes all four categories. Falls back to content-length estimation when the API doesn't return usage in streaming mode. Cache tokens normalized across all adapters: `inputTokens` excludes cache so usage isn't double-counted
 - **Adapter support** — All adapters emit `reasoning-delta` events:
 
 | Adapter | Reasoning Mechanism | Default Streaming |
