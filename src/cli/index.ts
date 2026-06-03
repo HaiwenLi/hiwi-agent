@@ -209,6 +209,7 @@ export async function main(options: CLIOptions = {}): Promise<void> {
         app.showPicker(items);
       }
     },
+    promptInput: (label: string) => app.promptInput(label),
   });
 
   // Show initial status bar with provider/model info

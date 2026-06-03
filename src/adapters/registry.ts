@@ -67,6 +67,26 @@ export class ProviderRegistry {
     this.activeProvider = name;
   }
 
+  /**
+   * Try to get or create an adapter for a provider.
+   * Returns the adapter if available, or null if creation fails (e.g. missing API key).
+   */
+  ensureAdapter(name: string): ModelAdapter | null {
+    if (this.adapters.has(name)) {
+      return this.adapters.get(name)!;
+    }
+    if (!this.config.providers[name] && !this.modelCatalog[name]) {
+      return null;
+    }
+    try {
+      const adapter = this.createAdapter(name);
+      this.registerAdapter(name, adapter);
+      return adapter;
+    } catch {
+      return null;
+    }
+  }
+
   setModel(modelId: string): void {
     this.activeModel = modelId;
     for (const [, adapter] of this.adapters) {

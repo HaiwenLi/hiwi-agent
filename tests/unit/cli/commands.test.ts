@@ -7,7 +7,13 @@ const makeContext = (): CommandContext => ({
     setModel: vi.fn(),
     getActiveProvider: vi.fn(() => "anthropic"),
     getActiveModel: vi.fn(() => "claude-sonnet-4-6"),
-    listModels: vi.fn(() => []),
+    listModels: vi.fn(() => [
+      { id: "gpt-4o", provider: "openai", capabilities: {} },
+    ]),
+    ensureAdapter: vi.fn(() => ({})),
+    updateProviderConfig: vi.fn(),
+    registerAdapter: vi.fn(),
+    createAdapter: vi.fn(() => ({})),
   } as any,
   memoryManager: {
     remember: vi.fn(async () => ({ isOk: () => true })),

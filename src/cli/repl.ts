@@ -30,6 +30,7 @@ export interface REPLDependencies {
   confirm?: (message: string) => Promise<boolean>;
   onStatusBarUpdate?: (data: import("../types.js").TokenUsage) => void;
   requestModeSwitch?: (mode: string) => void;
+  promptInput?: (label: string) => Promise<string>;
 }
 
 export class REPL {
@@ -380,6 +381,7 @@ export class REPL {
       thinkingEffort: this.thinkingEffort,
       setThinkingEffort: (effort: string) => this.setThinkingEffort(effort),
       requestModeSwitch: this.deps.requestModeSwitch,
+      promptInput: this.deps.promptInput,
     };
   }
 

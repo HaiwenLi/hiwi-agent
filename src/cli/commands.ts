@@ -1,5 +1,6 @@
 import { testConnection } from "../adapters/connection-test.js";
 import type { ProviderRegistry } from "../adapters/registry.js";
+import { saveProviderConfig } from "../core/config.js";
 import type { MemoryManager } from "../memory/manager.js";
 import type { SessionStore } from "../memory/session.js";
 import type { SkillRegistry } from "../skills/registry.js";
@@ -17,6 +18,7 @@ export interface CommandContext {
   thinkingEffort?: string;
   setThinkingEffort?: (effort: string) => void;
   requestModeSwitch?: (mode: string) => void;
+  promptInput?: (label: string) => Promise<string>;
 }
 
 export interface Command {
@@ -76,8 +78,30 @@ export class CommandRegistry {
           return models.map((m) => `  ${m.id} (${m.provider})`).join("\n");
         }
         const available = ctx.providerRegistry.listModels();
-        if (!available.some((m) => m.id === args)) {
+        const target = available.find((m) => m.id === args);
+        if (!target) {
           return `Unknown model: ${args}. Use /models to list available models.`;
+        }
+        // Ensure the provider's adapter exists (may prompt for API key)
+        const adapter = ctx.providerRegistry.ensureAdapter(target.provider);
+        if (!adapter) {
+          if (!ctx.promptInput) {
+            return `No adapter for "${target.provider}" and no input prompt available. Set the API key in config.`;
+          }
+          const apiKey = await ctx.promptInput(`API key for ${target.provider}: `);
+          if (!apiKey.trim()) return "Cancelled.";
+          ctx.providerRegistry.updateProviderConfig(target.provider, { apiKey: apiKey.trim() });
+          try {
+            const newAdapter = ctx.providerRegistry.createAdapter(target.provider);
+            ctx.providerRegistry.registerAdapter(target.provider, newAdapter);
+          } catch (err) {
+            return `Failed to create adapter: ${err instanceof Error ? err.message : String(err)}`;
+          }
+          try {
+            await saveProviderConfig(process.cwd(), target.provider, { apiKey: apiKey.trim() });
+          } catch {
+            // Non-critical
+          }
         }
         ctx.providerRegistry.setModel(args);
         return `Model set to: ${args}`;
@@ -94,6 +118,29 @@ export class CommandRegistry {
             return "";
           }
           return "Usage: /provider <name>";
+        }
+        // Try to get or lazily create an adapter
+        const adapter = ctx.providerRegistry.ensureAdapter(args);
+        if (!adapter) {
+          // No adapter and no API key — prompt user
+          if (!ctx.promptInput) {
+            return `No adapter for "${args}" and no input prompt available. Set the API key in config.`;
+          }
+          const apiKey = await ctx.promptInput(`API key for ${args}: `);
+          if (!apiKey.trim()) return "Cancelled.";
+          ctx.providerRegistry.updateProviderConfig(args, { apiKey: apiKey.trim() });
+          try {
+            const newAdapter = ctx.providerRegistry.createAdapter(args);
+            ctx.providerRegistry.registerAdapter(args, newAdapter);
+          } catch (err) {
+            return `Failed to create adapter: ${err instanceof Error ? err.message : String(err)}`;
+          }
+          // Persist API key to project config
+          try {
+            await saveProviderConfig(process.cwd(), args, { apiKey: apiKey.trim() });
+          } catch {
+            // Non-critical: config save failure shouldn't block the operation
+          }
         }
         ctx.providerRegistry.setProvider(args);
         return `Provider set to: ${args}`;

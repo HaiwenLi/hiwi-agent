@@ -81,14 +81,21 @@ class ChatComponent implements Component {
 	private allCommands: SlashCommand[] = [];
 	private popupVisible = false;
 	private popupIndex = 0;
+	private popupScrollOffset = 0;
 
 	// Picker popup state (model/provider selection)
 	private pickerItems: PickerItem[] = [];
 	private pickerVisible = false;
 	private pickerIndex = 0;
+	private pickerScrollOffset = 0;
 
 	// Loader for animated thinking indicator
 	private loader: Loader | null = null;
+
+	// Inline prompt state (for API key input etc.)
+	private awaitingInput = false;
+	private promptLabel = "";
+	private pendingInputResolve: ((value: string) => void) | null = null;
 
 	constructor(callbacks: AppCallbacks) {
 		this.callbacks = callbacks;
@@ -159,8 +166,8 @@ class ChatComponent implements Component {
 		}
 
 		// Input line
-		const prompt = "\x1b[34m> \x1b[0m";
-		const promptWidth = 2;
+		const prompt = this.awaitingInput ? `\x1b[33m${this.promptLabel}\x1b[0m` : "\x1b[34m> \x1b[0m";
+		const promptWidth = visibleWidth(prompt.replace(/\x1b\[[0-9;]*m/g, ""));
 		const inputWidth = width - promptWidth;
 		const displayInput = truncateToWidth(this.input, inputWidth);
 		result.push(`${prompt}${displayInput}\x1b[90m█\x1b[0m`);
@@ -188,12 +195,13 @@ class ChatComponent implements Component {
 		const filtered = this.getFilteredCommands();
 		if (filtered.length === 0) return [];
 
-		const visible = filtered.slice(0, POPOUP_MAX_VISIBLE);
+		const offset = this.popupScrollOffset;
+		const visible = filtered.slice(offset, offset + POPOUP_MAX_VISIBLE);
 		const lines: string[] = [];
 
 		for (let i = 0; i < visible.length; i++) {
 			const cmd = visible[i];
-			const selected = i === this.popupIndex;
+			const selected = i + offset === this.popupIndex;
 			const nameCol = cmd.name.padEnd(14);
 			const content = `/${nameCol} ${cmd.description}`;
 			if (selected) {
@@ -205,7 +213,12 @@ class ChatComponent implements Component {
 		}
 
 		if (filtered.length > POPOUP_MAX_VISIBLE) {
-			lines.push(`\x1b[90m   ... +${filtered.length - POPOUP_MAX_VISIBLE} more\x1b[0m`);
+			const hiddenAbove = offset;
+			const hiddenBelow = filtered.length - offset - visible.length;
+			let hint = "";
+			if (hiddenAbove > 0) hint += `↑${hiddenAbove} `;
+			if (hiddenBelow > 0) hint += `↓${hiddenBelow}`;
+			if (hint) lines.push(`\x1b[90m   ${hint}\x1b[0m`);
 		}
 
 		return lines;
@@ -267,13 +280,21 @@ class ChatComponent implements Component {
     if (this.pickerVisible) {
       if (matchesKey(data, Key.up)) {
         this.pickerIndex = Math.max(0, this.pickerIndex - 1);
+        this.pickerScrollOffset = Math.min(this.pickerScrollOffset, this.pickerIndex);
         this.requestRender();
         return;
       }
       if (matchesKey(data, Key.down)) {
         this.pickerIndex = Math.min(
-          Math.min(this.filteredPickerItems.length, POPOUP_MAX_VISIBLE) - 1,
+          this.filteredPickerItems.length - 1,
           this.pickerIndex + 1,
+        );
+        this.pickerScrollOffset = Math.max(
+          0,
+          Math.min(
+            this.pickerScrollOffset,
+            this.pickerIndex - POPOUP_MAX_VISIBLE + 1,
+          ),
         );
         this.requestRender();
         return;
@@ -321,12 +342,14 @@ class ChatComponent implements Component {
     if (this.popupVisible) {
 			if (matchesKey(data, Key.up)) {
 				this.popupIndex = Math.max(0, this.popupIndex - 1);
+				this.popupScrollOffset = Math.min(this.popupScrollOffset, this.popupIndex);
 				this.requestRender();
 				return;
 			}
 			if (matchesKey(data, Key.down)) {
 				const filtered = this.getFilteredCommands();
-				this.popupIndex = Math.min(Math.min(filtered.length, POPOUP_MAX_VISIBLE) - 1, this.popupIndex + 1);
+				this.popupIndex = Math.min(filtered.length - 1, this.popupIndex + 1);
+				this.popupScrollOffset = Math.max(0, Math.min(this.popupScrollOffset, this.popupIndex - POPOUP_MAX_VISIBLE + 1));
 				this.requestRender();
 				return;
 			}
@@ -405,6 +428,19 @@ class ChatComponent implements Component {
   private submitInput(): void {
     const text = this.input;
     if (!text.trim()) return;
+
+    // If awaiting inline input (e.g. API key), resolve the promise
+    if (this.awaitingInput && this.pendingInputResolve) {
+      this.input = "";
+      this.awaitingInput = false;
+      this.promptLabel = "";
+      const resolve = this.pendingInputResolve;
+      this.pendingInputResolve = null;
+      this.requestRender();
+      resolve(text);
+      return;
+    }
+
     this.popupVisible = false;
     this.pushLine(text, "user");
     this.input = "";
@@ -433,6 +469,7 @@ class ChatComponent implements Component {
 		if (this.input.startsWith("/")) {
 			const filtered = this.getFilteredCommands();
 			if (filtered.length > 0) {
+				this.popupScrollOffset = 0;
 				this.popupVisible = true;
 				this.popupIndex = Math.min(this.popupIndex, Math.min(filtered.length, POPOUP_MAX_VISIBLE) - 1);
 			} else {
@@ -487,11 +524,23 @@ class ChatComponent implements Component {
 		this.loader?.stop();
 	}
 
+	/** Prompt for inline input (e.g. API key). Returns the user's input. */
+	promptInput(label: string): Promise<string> {
+		return new Promise<string>((resolve) => {
+			this.awaitingInput = true;
+			this.promptLabel = label;
+			this.pendingInputResolve = resolve;
+			this.input = "";
+			this.requestRender();
+		});
+	}
+
 	/** Show a picker popup with the given items. */
 	showPicker(items: PickerItem[]): void {
 		this.pickerItems = items;
 		this.filteredPickerItems = items;
 		this.pickerIndex = 0;
+		this.pickerScrollOffset = 0;
 		this.pickerVisible = items.length > 0;
 		this.input = "";
 		this.requestRender();
@@ -509,18 +558,20 @@ class ChatComponent implements Component {
 			)
 			: this.pickerItems;
 		this.pickerIndex = Math.min(this.pickerIndex, Math.max(0, this.filteredPickerItems.length - 1));
+		this.pickerScrollOffset = Math.min(this.pickerScrollOffset, Math.max(0, this.filteredPickerItems.length - POPOUP_MAX_VISIBLE));
 	}
 
 	private renderPicker(width: number): string[] {
 		const items = this.filteredPickerItems;
 		if (items.length === 0) return ["[90m  No matches (Esc to cancel)[0m"];
 
-		const visible = items.slice(0, POPOUP_MAX_VISIBLE);
+		const offset = this.pickerScrollOffset;
+		const visible = items.slice(offset, offset + POPOUP_MAX_VISIBLE);
 		const lines: string[] = [];
 
 		for (let i = 0; i < visible.length; i++) {
 			const item = visible[i];
-			const selected = i === this.pickerIndex;
+			const selected = i + offset === this.pickerIndex;
 			const labelCol = item.label.padEnd(24);
 			const detail = item.detail ? ` ${item.detail}` : "";
 			const content = `${labelCol}${detail}`;
@@ -592,6 +643,8 @@ export interface AppHandle {
   onPauseRequest?: () => void;
   /** Show an interactive picker popup */
   showPicker: (items: PickerItem[]) => void;
+  /** Prompt for inline input (returns the entered string) */
+  promptInput: (label: string) => Promise<string>;
 }
 
 export function createApp(callbacks: AppCallbacks): AppHandle {
@@ -620,6 +673,7 @@ export function createApp(callbacks: AppCallbacks): AppHandle {
 		},
 			waitUntilExit: () => exitPromise,
 			showPicker: (items) => chat.showPicker(items),
+		promptInput: (label) => chat.promptInput(label),
 		};
 
 	// Pause request: ESC → ChatComponent → AppHandle.onPauseRequest
