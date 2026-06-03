@@ -264,6 +264,7 @@ export class MiniMaxAdapter implements ModelAdapter {
               prompt_tokens: number;
               completion_tokens: number;
               prompt_cache_hit_tokens?: number;
+              prompt_cache_miss_tokens?: number;
             };
           };
           try {
@@ -360,7 +361,7 @@ export class MiniMaxAdapter implements ModelAdapter {
             inputTokens = parsed.usage.prompt_tokens;
             outputTokens = parsed.usage.completion_tokens;
             cacheHitTokens = parsed.usage.prompt_cache_hit_tokens ?? 0;
-            cacheMissTokens = (parsed.usage as any).prompt_cache_miss_tokens ?? 0;
+            cacheMissTokens = parsed.usage.prompt_cache_miss_tokens ?? 0;
           }
         } catch (err) {
           console.error(

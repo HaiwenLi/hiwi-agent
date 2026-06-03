@@ -49,6 +49,14 @@ export class KimiAdapter implements ModelAdapter {
     this.capabilities = KIMI_MODELS[modelId] ?? DEFAULT_CAPABILITIES;
   }
 
+  /** Return default thinking config based on model family */
+  private defaultThinking(): Record<string, unknown> | undefined {
+    if (this.id === "kimi-k2.6") return { type: "enabled", keep: "all" };
+    if (this.id === "kimi-k2.5") return { type: "enabled" };
+    if (this.id === "kimi-k2-thinking") return { type: "enabled" };
+    return undefined;
+  }
+
   async chat(messages: Message[], options?: ChatOptions, signal?: AbortSignal): Promise<ChatResponse> {
     const params: Record<string, unknown> = {
       model: options?.model ?? this.id,
@@ -58,11 +66,14 @@ export class KimiAdapter implements ModelAdapter {
       tools: options?.tools ? this.convertTools(options.tools) : undefined,
     };
 
-    if (options?.thinking) {
+    // Apply thinking defaults for Kimi models
+    const thinking = options?.thinking ?? this.defaultThinking();
+    if (thinking) {
       params.extra_body = {};
-      (params.extra_body as Record<string, unknown>).thinking = options.thinking;
+      (params.extra_body as Record<string, unknown>).thinking = thinking;
     }
     if (options?.reasoningEffort) {
+      if (!params.extra_body) params.extra_body = {};
       (params.extra_body as Record<string, unknown>).reasoning_effort = options.reasoningEffort;
     }
 
@@ -122,11 +133,13 @@ export class KimiAdapter implements ModelAdapter {
       stream: true,
     };
 
-    if (options?.thinking) {
+    const thinking = options?.thinking ?? this.defaultThinking();
+    if (thinking) {
       params.extra_body = {};
-      (params.extra_body as Record<string, unknown>).thinking = options.thinking;
+      (params.extra_body as Record<string, unknown>).thinking = thinking;
     }
     if (options?.reasoningEffort) {
+      if (!params.extra_body) params.extra_body = {};
       (params.extra_body as Record<string, unknown>).reasoning_effort = options.reasoningEffort;
     }
 

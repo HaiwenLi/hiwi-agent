@@ -384,11 +384,17 @@ export class REPL {
   }
 
   getStatusBarData(): import("../types.js").TokenUsage {
+    const totalTokens =
+      this.cumulativeInputTokens +
+      this.cumulativeOutputTokens +
+      this.cumulativeCacheRead +
+      this.cumulativeCacheWrite;
     return {
       inputTokens: this.cumulativeInputTokens,
       outputTokens: this.cumulativeOutputTokens,
-      cacheReadTokens: this.cumulativeCacheRead,
-      cacheWriteTokens: this.cumulativeCacheWrite,
+      cacheReadTokens: this.cumulativeCacheRead || undefined,
+      cacheWriteTokens: this.cumulativeCacheWrite || undefined,
+      totalTokens,
       contextPercent: null,
       contextWindow: 0,
       modelName: "",

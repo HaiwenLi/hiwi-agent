@@ -32,7 +32,7 @@ describe("OllamaAdapter", () => {
     const resp = await adapter.chat([{ role: "user", content: "hi" }]);
     expect(resp.content).toBe("Hello from Ollama!");
     expect(resp.finishReason).toBe("stop");
-    expect(resp.usage).toEqual({ inputTokens: 10, outputTokens: 5 });
+    expect(resp.usage).toMatchObject({ inputTokens: 10, outputTokens: 5, totalTokens: 15 });
   });
 
   it("handles tool calls from Ollama", async () => {

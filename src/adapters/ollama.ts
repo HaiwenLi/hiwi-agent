@@ -6,11 +6,10 @@ import type {
   ModelAdapter,
   ModelCapabilities,
   StreamChunk,
-  TokenUsage,
   ToolCall,
   ToolDefinition,
 } from "../types.js";
-import { extractText } from "./adapter-utils.js";
+import { buildNormalizedUsage, enrichUsage, extractText } from "./adapter-utils.js";
 
 export const OLLAMA_MODELS: Record<string, ModelCapabilities> = {
   llama3: { tools: true, vision: false, maxTokens: 8192, contextWindow: 8192 },
@@ -98,10 +97,15 @@ export class OllamaAdapter implements ModelAdapter {
           input: tc.function.arguments,
         })),
         finishReason: data.message.tool_calls?.length ? "tool-calls" : "stop",
-        usage: {
-          inputTokens: data.prompt_eval_count ?? 0,
-          outputTokens: data.eval_count ?? 0,
-        },
+        usage: enrichUsage(
+          buildNormalizedUsage("ollama", {
+            prompt_eval_count: data.prompt_eval_count,
+            eval_count: data.eval_count,
+          }),
+          this.capabilities.contextWindow,
+          this.id,
+          this.provider,
+        ),
       };
     } catch (error) {
       throw new Error(`Ollama error: ${error instanceof Error ? error.message : String(error)}`);
@@ -217,10 +221,15 @@ export class OllamaAdapter implements ModelAdapter {
                 };
               }
 
-              this.lastUsage = {
-                inputTokens: chunk.prompt_eval_count ?? 0,
-                outputTokens: chunk.eval_count ?? 0,
-              };
+              this.lastUsage = enrichUsage(
+                buildNormalizedUsage("ollama", {
+                  prompt_eval_count: chunk.prompt_eval_count,
+                  eval_count: chunk.eval_count,
+                }),
+                this.capabilities.contextWindow,
+                this.id,
+                this.provider,
+              );
               yield {
                 type: "finish",
                 finishReason: hasToolCalls ? "tool-calls" : "stop",

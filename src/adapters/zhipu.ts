@@ -215,6 +215,7 @@ export class ZhipuAdapter implements ModelAdapter {
     let inputTokens = 0;
     let outputTokens = 0;
     let cacheHitTokens = 0;
+    let cacheMissTokens = 0;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -251,6 +252,7 @@ export class ZhipuAdapter implements ModelAdapter {
               prompt_tokens_details?: {
                 cached_tokens?: number;
               };
+              prompt_cache_miss_tokens?: number;
             };
           };
 
@@ -300,6 +302,7 @@ export class ZhipuAdapter implements ModelAdapter {
             inputTokens = parsed.usage.prompt_tokens;
             outputTokens = parsed.usage.completion_tokens;
             cacheHitTokens = parsed.usage.prompt_tokens_details?.cached_tokens ?? 0;
+            cacheMissTokens = parsed.usage.prompt_cache_miss_tokens ?? 0;
           }
         } catch {
           // skip invalid chunks
@@ -324,6 +327,7 @@ export class ZhipuAdapter implements ModelAdapter {
         prompt_tokens: inputTokens,
         completion_tokens: outputTokens,
         prompt_tokens_details: { cached_tokens: cacheHitTokens > 0 ? cacheHitTokens : undefined },
+        prompt_cache_miss_tokens: cacheMissTokens > 0 ? cacheMissTokens : undefined,
       }),
       this.capabilities.contextWindow,
       modelName,
