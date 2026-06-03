@@ -244,11 +244,14 @@ class ChatComponent implements Component {
 			else if (d.contextPercent > 70) contextColor = "33";
 		}
 
-		const cachePart = d.cacheReadTokens != null && d.cacheReadTokens > 0
-			? ` \x1b[32m\x1b[2mcache${formatTokens(d.cacheReadTokens)}\x1b[0m`
+		const cacheReadPart = d.cacheReadTokens != null && d.cacheReadTokens > 0
+			? ` \x1b[32m\x1b[2m↗${formatTokens(d.cacheReadTokens)}\x1b[0m`
+			: "";
+		const cacheWritePart = d.cacheWriteTokens != null && d.cacheWriteTokens > 0
+			? ` \x1b[33m\x1b[2m↘${formatTokens(d.cacheWriteTokens)}\x1b[0m`
 			: "";
 
-		const left = `\x1b[${contextColor}m↑${formatTokens(d.inputTokens)} ↓${formatTokens(d.outputTokens)}${cachePart} ${contextStr}/${formatTokens(d.contextWindow ?? 200000)}\x1b[0m`;
+		const left = `\x1b[${contextColor}m↑${formatTokens(d.inputTokens)} ↓${formatTokens(d.outputTokens)}${cacheReadPart}${cacheWritePart} ${contextStr}/${formatTokens(d.contextWindow ?? 200000)}\x1b[0m`;
 		const effort = d.thinkingEffort ?? "high";
 		const right = `${d.provider} ${d.modelName} \x1b[90m[\x1b[37m${effort}\x1b[90m]\x1b[0m`;
 		const leftWidth = visibleWidth(left);

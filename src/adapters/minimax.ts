@@ -9,7 +9,7 @@ import type {
   ToolCall,
   ToolDefinition,
 } from "../types.js";
-import { extractText, safeJsonParse } from "./adapter-utils.js";
+import { buildNormalizedUsage, enrichUsage, extractText, safeJsonParse } from "./adapter-utils.js";
 
 export const MINIMAX_MODELS: Record<string, ModelCapabilities> = {
   "MiniMax-M3": { tools: true, vision: true, maxTokens: 64_000, contextWindow: 1_000_000 },
@@ -149,27 +149,18 @@ export class MiniMaxAdapter implements ModelAdapter {
       input: safeJsonParse(tc.function.arguments),
     }));
 
-    const inputTk = data.usage?.prompt_tokens ?? 0;
-    const outputTk = data.usage?.completion_tokens ?? 0;
+    const baseUsage = buildNormalizedUsage("minimax", {
+      prompt_tokens: data.usage?.prompt_tokens,
+      completion_tokens: data.usage?.completion_tokens,
+      prompt_cache_hit_tokens: data.usage?.prompt_cache_hit_tokens,
+      prompt_cache_miss_tokens: data.usage?.prompt_cache_miss_tokens,
+    });
 
     return {
       content: choice?.message?.content ?? "",
       toolCalls,
       finishReason: choice?.finish_reason === "tool_calls" ? "tool-calls" : "stop",
-      usage: {
-        inputTokens: inputTk,
-        outputTokens: outputTk,
-        cacheReadTokens: data.usage?.prompt_cache_hit_tokens,
-        cacheWriteTokens: data.usage?.prompt_cache_miss_tokens,
-        contextWindow: this.capabilities.contextWindow,
-        contextPercent:
-          this.capabilities.contextWindow > 0
-            ? Math.round((inputTk / this.capabilities.contextWindow) * 100)
-            : null,
-        modelName: data.model ?? this.id,
-        provider: this.provider,
-        thinkingEffort: options?.reasoningEffort,
-      },
+      usage: enrichUsage(baseUsage, this.capabilities.contextWindow, data.model ?? this.id, this.provider, options?.reasoningEffort),
     };
   }
 
@@ -229,6 +220,7 @@ export class MiniMaxAdapter implements ModelAdapter {
     let inputTokens = 0;
     let outputTokens = 0;
     let cacheHitTokens = 0;
+    let cacheMissTokens = 0;
     let totalContentLen = 0; // for fallback token estimation
     // MiniMax returns thinking content as <think> XML tags within the content field
     let inThinkTag = false;
@@ -368,6 +360,7 @@ export class MiniMaxAdapter implements ModelAdapter {
             inputTokens = parsed.usage.prompt_tokens;
             outputTokens = parsed.usage.completion_tokens;
             cacheHitTokens = parsed.usage.prompt_cache_hit_tokens ?? 0;
+            cacheMissTokens = (parsed.usage as any).prompt_cache_miss_tokens ?? 0;
           }
         } catch (err) {
           console.error(
@@ -392,19 +385,18 @@ export class MiniMaxAdapter implements ModelAdapter {
       };
     }
 
-    const usage: TokenUsage = {
-      inputTokens,
-      outputTokens,
-      cacheReadTokens: cacheHitTokens > 0 ? cacheHitTokens : undefined,
-      contextWindow: this.capabilities.contextWindow,
-      contextPercent:
-        this.capabilities.contextWindow > 0
-          ? Math.round((inputTokens / this.capabilities.contextWindow) * 100)
-          : null,
+    const usage = enrichUsage(
+      buildNormalizedUsage("minimax", {
+        prompt_tokens: inputTokens,
+        completion_tokens: outputTokens,
+        prompt_cache_hit_tokens: cacheHitTokens > 0 ? cacheHitTokens : undefined,
+        prompt_cache_miss_tokens: cacheMissTokens > 0 ? cacheMissTokens : undefined,
+      }),
+      this.capabilities.contextWindow,
       modelName,
-      provider: this.provider,
-      thinkingEffort: options?.reasoningEffort,
-    };
+      this.provider,
+      options?.reasoningEffort,
+    );
     this.lastUsage = usage;
     yield {
       type: "finish",

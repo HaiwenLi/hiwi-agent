@@ -332,9 +332,11 @@ export class REPL {
     statusData.modelName = currentAdapter.id ?? "unknown";
     statusData.provider = currentAdapter.provider ?? "unknown";
     statusData.contextWindow = currentAdapter.capabilities?.contextWindow ?? 200000;
-    if (statusData.contextWindow && statusData.contextWindow > 0) {
-      const totalTokens = statusData.inputTokens + statusData.outputTokens;
-      statusData.contextPercent = (totalTokens / statusData.contextWindow) * 100;
+    if (statusData.contextWindow > 0) {
+      statusData.contextPercent =
+        Math.round((statusData.inputTokens / statusData.contextWindow) * 1000) / 10;
+    } else {
+      statusData.contextPercent = null;
     }
     this.deps.onStatusBarUpdate?.(statusData);
 
