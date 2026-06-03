@@ -10,6 +10,7 @@ import type {
   TokenUsage,
   ToolDefinition,
 } from "../types.js";
+import { createThinkContext, endsWithPartialTag, processThinkStream, safeJsonParse, stripThinkTags } from "./adapter-utils.js";
 
 export const KIMI_MODELS: Record<string, ModelCapabilities> = {
   "kimi-k2.6": { tools: true, vision: true, maxTokens: 32_000, contextWindow: 262_144 },
@@ -25,25 +26,6 @@ const DEFAULT_CAPABILITIES: ModelCapabilities = {
   maxTokens: 16384,
   contextWindow: 128_000,
 };
-
-function stripThinkTags(text: string): { thinkContent: string; cleanContent: string } {
-  const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
-  let thinkContent = "";
-  const cleanContent = text
-    .replace(thinkRegex, (_, content) => {
-      thinkContent += content;
-      return "";
-    })
-    .trim();
-  return { thinkContent, cleanContent };
-}
-
-function endsWithPartialTag(buffer: string, tag: string): boolean {
-  for (let len = 1; len < tag.length; len++) {
-    if (buffer.endsWith(tag.substring(0, len))) return true;
-  }
-  return false;
-}
 
 function buildUsage(raw: {
   prompt_tokens?: number;
@@ -95,17 +77,6 @@ export class KimiAdapter implements ModelAdapter {
     this.capabilities = KIMI_MODELS[modelId] ?? DEFAULT_CAPABILITIES;
   }
 
-  private isKimiK26(): boolean {
-    return this.id === "kimi-k2.6";
-  }
-
-  private getThinkingDefault(): Record<string, unknown> {
-    if (this.isKimiK26()) {
-      return { type: "enabled", keep: "all" };
-    }
-    return { type: "enabled" };
-  }
-
   async chat(messages: Message[], options?: ChatOptions, signal?: AbortSignal): Promise<ChatResponse> {
     const params: Record<string, unknown> = {
       model: options?.model ?? this.id,
@@ -115,11 +86,9 @@ export class KimiAdapter implements ModelAdapter {
       tools: options?.tools ? this.convertTools(options.tools) : undefined,
     };
 
-    params.extra_body = {};
     if (options?.thinking) {
+      params.extra_body = {};
       (params.extra_body as Record<string, unknown>).thinking = options.thinking;
-    } else {
-      (params.extra_body as Record<string, unknown>).thinking = this.getThinkingDefault();
     }
     if (options?.reasoningEffort) {
       (params.extra_body as Record<string, unknown>).reasoning_effort = options.reasoningEffort;
@@ -154,7 +123,7 @@ export class KimiAdapter implements ModelAdapter {
       toolCalls: tc.map((t) => ({
         id: t.id,
         name: t.function.name,
-        input: (() => { try { return JSON.parse(t.function.arguments); } catch { return {}; } })(),
+        input: safeJsonParse(t.function.arguments),
       })),
       finishReason: choice.finish_reason === "tool_calls" ? "tool-calls" : "stop",
       usage: enrichUsage(
@@ -176,11 +145,9 @@ export class KimiAdapter implements ModelAdapter {
       stream: true,
     };
 
-    params.extra_body = {};
     if (options?.thinking) {
+      params.extra_body = {};
       (params.extra_body as Record<string, unknown>).thinking = options.thinking;
-    } else {
-      (params.extra_body as Record<string, unknown>).thinking = this.getThinkingDefault();
     }
     if (options?.reasoningEffort) {
       (params.extra_body as Record<string, unknown>).reasoning_effort = options.reasoningEffort;
@@ -203,8 +170,7 @@ export class KimiAdapter implements ModelAdapter {
     let finishReason = "stop";
     let inputTokens = 0;
     let outputTokens = 0;
-    let thinkMode = false;
-    let thinkBuffer = "";
+    const thinkCtx = createThinkContext();
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta as Record<string, unknown> | undefined;
@@ -212,35 +178,8 @@ export class KimiAdapter implements ModelAdapter {
         yield { type: "reasoning-delta", text: (delta as any).reasoning_content as string };
       }
       if (delta?.content) {
-        thinkBuffer += delta.content as string;
-        while (thinkBuffer) {
-          if (thinkMode) {
-            const closeIdx = thinkBuffer.indexOf("</think>");
-            if (closeIdx >= 0) {
-              yield { type: "reasoning-delta", text: thinkBuffer.substring(0, closeIdx) };
-              thinkBuffer = thinkBuffer.substring(closeIdx + 8);
-              thinkMode = false;
-            } else if (endsWithPartialTag(thinkBuffer, "</think>")) {
-              break;
-            } else {
-              yield { type: "reasoning-delta", text: thinkBuffer };
-              thinkBuffer = "";
-            }
-          } else {
-            const openIdx = thinkBuffer.indexOf("<think>");
-            if (openIdx >= 0) {
-              if (openIdx > 0) {
-                yield { type: "text-delta", text: thinkBuffer.substring(0, openIdx) };
-              }
-              thinkBuffer = thinkBuffer.substring(openIdx + 7);
-              thinkMode = true;
-            } else if (endsWithPartialTag(thinkBuffer, "<think>")) {
-              break;
-            } else {
-              yield { type: "text-delta", text: thinkBuffer };
-              thinkBuffer = "";
-            }
-          }
+        for (const event of processThinkStream(delta.content as string, thinkCtx)) {
+          yield event;
         }
       }
       if (delta?.tool_calls) {
@@ -273,8 +212,8 @@ export class KimiAdapter implements ModelAdapter {
       }
     }
 
-    if (thinkBuffer) {
-      yield { type: thinkMode ? "reasoning-delta" : "text-delta", text: thinkBuffer };
+    if (thinkCtx.thinkBuffer) {
+      yield { type: thinkCtx.thinkMode ? "reasoning-delta" : "text-delta", text: thinkCtx.thinkBuffer };
     }
 
     for (const [, tc] of toolCallMap) {
@@ -283,7 +222,7 @@ export class KimiAdapter implements ModelAdapter {
         toolCall: {
           id: tc.id,
           name: tc.name,
-          input: (() => { try { return JSON.parse(tc.arguments || "{}"); } catch { return {}; } })(),
+          input: safeJsonParse(tc.arguments),
         },
       };
     }

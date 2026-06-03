@@ -1,7 +1,6 @@
 import type {
   ChatOptions,
   ChatResponse,
-  ContentPart,
   Message,
   ModelAdapter,
   ModelCapabilities,
@@ -10,6 +9,7 @@ import type {
   ToolCall,
   ToolDefinition,
 } from "../types.js";
+import { extractText, safeJsonParse } from "./adapter-utils.js";
 
 export const ZHIPU_MODELS: Record<string, ModelCapabilities> = {
   "glm-5.1": { tools: true, vision: true, maxTokens: 128_000, contextWindow: 200_000 },
@@ -17,10 +17,16 @@ export const ZHIPU_MODELS: Record<string, ModelCapabilities> = {
   "glm-5-turbo": { tools: true, vision: true, maxTokens: 128_000, contextWindow: 200_000 },
   "glm-4.7": { tools: true, vision: true, maxTokens: 128_000, contextWindow: 200_000 },
   "glm-4.7-flashx": { tools: true, vision: false, maxTokens: 128_000, contextWindow: 200_000 },
+  "glm-4.7-flash": { tools: true, vision: false, maxTokens: 128_000, contextWindow: 200_000 },
   "glm-4.6": { tools: true, vision: false, maxTokens: 128_000, contextWindow: 200_000 },
   "glm-4.5-air": { tools: true, vision: false, maxTokens: 96_000, contextWindow: 128_000 },
   "glm-4.5-airx": { tools: true, vision: false, maxTokens: 96_000, contextWindow: 128_000 },
-  "glm-4.7-flash": { tools: true, vision: false, maxTokens: 128_000, contextWindow: 200_000 },
+  "glm-4-flash": { tools: true, vision: false, maxTokens: 4_096, contextWindow: 128_000 },
+  "glm-4-plus": { tools: true, vision: false, maxTokens: 4_096, contextWindow: 128_000 },
+  "glm-4": { tools: true, vision: true, maxTokens: 4_096, contextWindow: 128_000 },
+  "glm-4v": { tools: false, vision: true, maxTokens: 4_096, contextWindow: 128_000 },
+  "glm-3-turbo": { tools: false, vision: false, maxTokens: 4_096, contextWindow: 128_000 },
+  "glm-turbo": { tools: false, vision: false, maxTokens: 4_096, contextWindow: 128_000 },
 };
 
 const DEFAULT_MODEL = "glm-5.1";
@@ -58,8 +64,7 @@ export class ZhipuAdapter implements ModelAdapter {
       model: options?.model ?? this.id,
       messages: this.convertMessages(messages),
       max_tokens: options?.maxTokens ?? this.capabilities.maxTokens,
-      temperature: options?.temperature ?? 1.0,
-      top_p: options?.top_p ?? 0.95,
+      temperature: options?.temperature ?? 0.7,
     };
     if (options?.tools?.length) {
       body.tools = this.convertTools(options.tools);
@@ -135,7 +140,7 @@ export class ZhipuAdapter implements ModelAdapter {
     const toolCalls: ToolCall[] = (choice?.message?.tool_calls ?? []).map((tc) => ({
       id: tc.id,
       name: tc.function.name,
-      input: (() => { try { return JSON.parse(tc.function.arguments); } catch { return {}; } })(),
+      input: safeJsonParse(tc.function.arguments),
     }));
 
     const inputTk = data.usage?.prompt_tokens ?? 0;
@@ -168,8 +173,7 @@ export class ZhipuAdapter implements ModelAdapter {
       model: options?.model ?? this.id,
       messages: this.convertMessages(messages),
       max_tokens: options?.maxTokens ?? this.capabilities.maxTokens,
-      temperature: options?.temperature ?? 1.0,
-      top_p: options?.top_p ?? 0.95,
+      temperature: options?.temperature ?? 0.7,
       stream: true,
       stream_options: { include_usage: true },
     };
@@ -321,7 +325,7 @@ export class ZhipuAdapter implements ModelAdapter {
         toolCall: {
           id: tc.id,
           name: tc.name,
-          input: (() => { try { return JSON.parse(tc.arguments || "{}"); } catch { return {}; } })(),
+          input: safeJsonParse(tc.arguments),
         },
       };
     }
@@ -347,25 +351,17 @@ export class ZhipuAdapter implements ModelAdapter {
     };
   }
 
-  private extractText(content: string | ContentPart[]): string {
-    if (typeof content === "string") return content;
-    return content
-      .filter((p): p is { type: "text"; text: string } => p.type === "text")
-      .map((p) => p.text)
-      .join("\n");
-  }
-
   private convertMessages(messages: Message[]): Array<Record<string, unknown>> {
     return messages.map((msg) => {
       switch (msg.role) {
         case "system":
-          return { role: "system", content: this.extractText(msg.content) };
+          return { role: "system", content: extractText(msg.content) };
         case "user":
-          return { role: "user", content: this.extractText(msg.content) };
+          return { role: "user", content: extractText(msg.content) };
         case "assistant": {
           const result: Record<string, unknown> = {
             role: "assistant",
-            content: msg.content || null,
+            content: msg.content ?? null,
           };
           if (msg.reasoningContent) {
             result.reasoning_content = msg.reasoningContent;
@@ -385,7 +381,7 @@ export class ZhipuAdapter implements ModelAdapter {
         case "tool":
           return {
             role: "tool",
-            content: this.extractText(msg.content),
+            content: extractText(msg.content),
             tool_call_id: msg.toolCallId ?? "",
           };
       }

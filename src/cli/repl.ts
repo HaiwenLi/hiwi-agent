@@ -113,7 +113,7 @@ export class REPL {
           }
         }
         this.deps.onOutput("\n[Continuing...]\n");
-        return await this.chat("continue");
+        return await this.continueChat();
       }
       if (lower === "n" || lower === "no") {
         this.deniedTools.push(toolName);
@@ -204,15 +204,7 @@ export class REPL {
     this.currentLoop?.pause();
   }
 
-  private async chat(message: string): Promise<string> {
-    if (!this.sessionId) {
-      const session = this.deps.sessionStore.createSession(process.cwd());
-      this.sessionId = session.id;
-    }
-
-    this.messages.push({ role: "user", content: message });
-    this.deps.sessionStore.appendMessage(this.sessionId, "user", message, Math.ceil(message.length / 4));
-
+  private async runLoop(): Promise<string> {
     const adapter = this.deps.providerRegistry.getActiveAdapter();
     const loopConfig = { ...this.deps.loopConfig, thinkingEffort: this.thinkingEffort };
     const loop = new AgentLoop(
@@ -346,11 +338,26 @@ export class REPL {
     }
     this.deps.onStatusBarUpdate?.(statusData);
 
-    if (fullOutput) {
+    if (fullOutput && this.sessionId) {
       this.deps.sessionStore.appendMessage(this.sessionId, "assistant", fullOutput, Math.ceil(fullOutput.length / 4));
     }
 
     return fullOutput;
+  }
+
+  private async chat(message: string): Promise<string> {
+    if (!this.sessionId) {
+      const session = this.deps.sessionStore.createSession(process.cwd());
+      this.sessionId = session.id;
+    }
+    this.messages.push({ role: "user", content: message });
+    this.deps.sessionStore.appendMessage(this.sessionId, "user", message, Math.ceil(message.length / 4));
+    return this.runLoop();
+  }
+
+  /** Resume execution after permission granted without adding a synthetic user message */
+  private async continueChat(): Promise<string> {
+    return this.runLoop();
   }
 
   private extractToolNameFromResult(content: string): string | null {

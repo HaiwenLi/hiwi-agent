@@ -203,14 +203,11 @@ export class AnthropicAdapter implements ModelAdapter {
         if (msg.toolCalls?.length) {
           const results: Anthropic.ToolResultBlockParam[] = [];
           for (const tc of msg.toolCalls) {
-            const resultContent = toolResults.get(tc.id);
-            if (resultContent !== undefined) {
-              results.push({
-                type: "tool_result",
-                tool_use_id: tc.id,
-                content: resultContent,
-              });
-            }
+            results.push({
+              type: "tool_result",
+              tool_use_id: tc.id,
+              content: toolResults.get(tc.id) ?? "",
+            });
           }
           if (results.length > 0) {
             converted.push({ role: "user", content: results });

@@ -412,6 +412,10 @@ class ChatComponent implements Component {
       this.processing = false;
       this.loader?.stop();
       this.requestRender();
+    }).catch(() => {
+      this.processing = false;
+      this.loader?.stop();
+      this.requestRender();
     });
   }
 
@@ -543,6 +547,10 @@ class ChatComponent implements Component {
 		this.loader?.start();
 		this.requestRender();
 		this.callbacks.onInput(item.value).then(() => {
+			this.processing = false;
+			this.loader?.stop();
+			this.requestRender();
+		}).catch(() => {
 			this.processing = false;
 			this.loader?.stop();
 			this.requestRender();

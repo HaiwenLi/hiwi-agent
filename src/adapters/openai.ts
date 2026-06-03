@@ -2,7 +2,6 @@ import OpenAI from "openai";
 import type {
   ChatOptions,
   ChatResponse,
-  ContentPart,
   Message,
   ModelAdapter,
   ModelCapabilities,
@@ -10,6 +9,7 @@ import type {
   TokenUsage,
   ToolDefinition,
 } from "../types.js";
+import { safeJsonParse } from "./adapter-utils.js";
 
 export const OPENAI_MODELS: Record<string, ModelCapabilities> = {
   "gpt-4o": { tools: true, vision: true, maxTokens: 16_384, contextWindow: 128_000 },
@@ -79,7 +79,7 @@ export class OpenAIAdapter implements ModelAdapter {
       toolCalls: tc.map((t) => ({
         id: t.id,
         name: t.function.name,
-        input: (() => { try { return JSON.parse(t.function.arguments); } catch { return {}; } })(),
+        input: safeJsonParse(t.function.arguments),
       })),
       finishReason: choice.finish_reason === "tool_calls" ? "tool-calls" : "stop",
       usage: {
@@ -164,7 +164,7 @@ export class OpenAIAdapter implements ModelAdapter {
         toolCall: {
           id: tc.id,
           name: tc.name,
-          input: (() => { try { return JSON.parse(tc.arguments || "{}"); } catch { return {}; } })(),
+          input: safeJsonParse(tc.arguments),
         },
       };
     }

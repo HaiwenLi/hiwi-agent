@@ -61,14 +61,17 @@ export class ProviderRegistry {
     if (!this.modelCatalog[name] && !this.adapters.has(name)) {
       throw new Error(`Unknown provider: ${name}`);
     }
+    if (!this.adapters.has(name)) {
+      throw new Error(`No adapter registered for provider: ${name}. Use /test to initialize the provider first.`);
+    }
     this.activeProvider = name;
   }
 
   setModel(modelId: string): void {
     this.activeModel = modelId;
-    // Only update the active adapter, not all registered adapters
-    const active = this.adapters.get(this.activeProvider);
-    active?.setModel?.(modelId);
+    for (const [, adapter] of this.adapters) {
+      adapter.setModel?.(modelId);
+    }
   }
 
   updateProviderConfig(providerName: string, config: ProviderConfig): void {

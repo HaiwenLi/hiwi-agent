@@ -10,6 +10,7 @@ import type {
   ToolCall,
   ToolDefinition,
 } from "../types.js";
+import { extractText } from "./adapter-utils.js";
 
 export const OLLAMA_MODELS: Record<string, ModelCapabilities> = {
   llama3: { tools: true, vision: false, maxTokens: 8192, contextWindow: 8192 },
@@ -188,8 +189,12 @@ export class OllamaAdapter implements ModelAdapter {
                   // Ollama sends arguments as already-parsed objects, not strings.
                   // Merge objects rather than concatenating JSON strings.
                   if (entry.arguments) {
-                    const merged = { ...JSON.parse(entry.arguments), ...tc.function.arguments };
-                    entry.arguments = JSON.stringify(merged);
+                    try {
+                      const merged = { ...JSON.parse(entry.arguments), ...tc.function.arguments };
+                      entry.arguments = JSON.stringify(merged);
+                    } catch {
+                      entry.arguments = JSON.stringify(tc.function.arguments);
+                    }
                   } else {
                     entry.arguments = JSON.stringify(tc.function.arguments);
                   }
@@ -240,11 +245,11 @@ export class OllamaAdapter implements ModelAdapter {
     return messages.map((msg) => {
       switch (msg.role) {
         case "system":
-          return { role: "system", content: this.extractText(msg.content) };
+          return { role: "system", content: extractText(msg.content) };
         case "user": {
           const result: Record<string, unknown> = {
             role: "user",
-            content: this.extractText(msg.content),
+            content: extractText(msg.content),
           };
           const images = this.extractImages(msg.content);
           if (images.length) {
@@ -255,7 +260,7 @@ export class OllamaAdapter implements ModelAdapter {
         case "assistant": {
           const result: Record<string, unknown> = {
             role: "assistant",
-            content: this.extractText(msg.content) || "",
+            content: extractText(msg.content) || "",
           };
           if (msg.toolCalls?.length) {
             result.tool_calls = msg.toolCalls.map((tc) => ({
@@ -271,14 +276,6 @@ export class OllamaAdapter implements ModelAdapter {
           };
       }
     });
-  }
-
-  private extractText(content: string | ContentPart[]): string {
-    if (typeof content === "string") return content;
-    return content
-      .filter((p): p is { type: "text"; text: string } => p.type === "text")
-      .map((p) => p.text)
-      .join("\n");
   }
 
   private extractImages(content: string | ContentPart[]): string[] {

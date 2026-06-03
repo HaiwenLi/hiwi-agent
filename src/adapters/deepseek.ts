@@ -2,7 +2,6 @@ import OpenAI from "openai";
 import type {
   ChatOptions,
   ChatResponse,
-  ContentPart,
   Message,
   ModelAdapter,
   ModelCapabilities,
@@ -10,6 +9,7 @@ import type {
   TokenUsage,
   ToolDefinition,
 } from "../types.js";
+import { createThinkContext, endsWithPartialTag, processThinkStream, safeJsonParse, stripThinkTags } from "./adapter-utils.js";
 
 export const DEEPSEEK_MODELS: Record<string, ModelCapabilities> = {
   "deepseek-v4-pro": { tools: true, vision: false, maxTokens: 384_000, contextWindow: 1_000_000 },
@@ -21,25 +21,6 @@ const DEFAULT_MODEL = "deepseek-v4-pro";
 
 const THINKING_DEFAULT = { type: "enabled" as const };
 const REASONING_EFFORT_DEFAULT = "high";
-
-function stripThinkTags(text: string): { thinkContent: string; cleanContent: string } {
-  const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
-  let thinkContent = "";
-  const cleanContent = text
-    .replace(thinkRegex, (_, content) => {
-      thinkContent += content;
-      return "";
-    })
-    .trim();
-  return { thinkContent, cleanContent };
-}
-
-function endsWithPartialTag(buffer: string, tag: string): boolean {
-  for (let len = 1; len < tag.length; len++) {
-    if (buffer.endsWith(tag.substring(0, len))) return true;
-  }
-  return false;
-}
 
 function buildUsage(raw: {
   prompt_tokens?: number;
@@ -133,7 +114,7 @@ export class DeepSeekAdapter implements ModelAdapter {
       toolCalls: tc.map((t) => ({
         id: t.id,
         name: t.function.name,
-        input: (() => { try { return JSON.parse(t.function.arguments); } catch { return {}; } })(),
+        input: safeJsonParse(t.function.arguments),
       })),
       finishReason: choice.finish_reason === "tool_calls" ? "tool-calls" : "stop",
       usage: enrichUsage(
@@ -177,8 +158,7 @@ export class DeepSeekAdapter implements ModelAdapter {
     let finishReason = "stop";
     let inputTokens = 0;
     let outputTokens = 0;
-    let thinkMode = false;
-    let thinkBuffer = "";
+    const thinkCtx = createThinkContext();
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta as Record<string, unknown> | undefined;
@@ -186,35 +166,8 @@ export class DeepSeekAdapter implements ModelAdapter {
         yield { type: "reasoning-delta", text: (delta as any).reasoning_content as string };
       }
       if (delta?.content) {
-        thinkBuffer += delta.content as string;
-        while (thinkBuffer) {
-          if (thinkMode) {
-            const closeIdx = thinkBuffer.indexOf("</think>");
-            if (closeIdx >= 0) {
-              yield { type: "reasoning-delta", text: thinkBuffer.substring(0, closeIdx) };
-              thinkBuffer = thinkBuffer.substring(closeIdx + 8);
-              thinkMode = false;
-            } else if (endsWithPartialTag(thinkBuffer, "</think>")) {
-              break;
-            } else {
-              yield { type: "reasoning-delta", text: thinkBuffer };
-              thinkBuffer = "";
-            }
-          } else {
-            const openIdx = thinkBuffer.indexOf("<think>");
-            if (openIdx >= 0) {
-              if (openIdx > 0) {
-                yield { type: "text-delta", text: thinkBuffer.substring(0, openIdx) };
-              }
-              thinkBuffer = thinkBuffer.substring(openIdx + 7);
-              thinkMode = true;
-            } else if (endsWithPartialTag(thinkBuffer, "<think>")) {
-              break;
-            } else {
-              yield { type: "text-delta", text: thinkBuffer };
-              thinkBuffer = "";
-            }
-          }
+        for (const event of processThinkStream(delta.content as string, thinkCtx)) {
+          yield event;
         }
       }
       if (delta?.tool_calls) {
@@ -246,8 +199,8 @@ export class DeepSeekAdapter implements ModelAdapter {
       }
     }
 
-    if (thinkBuffer) {
-      yield { type: thinkMode ? "reasoning-delta" : "text-delta", text: thinkBuffer };
+    if (thinkCtx.thinkBuffer) {
+      yield { type: thinkCtx.thinkMode ? "reasoning-delta" : "text-delta", text: thinkCtx.thinkBuffer };
     }
 
     for (const [, tc] of toolCallMap) {
@@ -256,7 +209,7 @@ export class DeepSeekAdapter implements ModelAdapter {
         toolCall: {
           id: tc.id,
           name: tc.name,
-          input: (() => { try { return JSON.parse(tc.arguments || "{}"); } catch { return {}; } })(),
+          input: safeJsonParse(tc.arguments),
         },
       };
     }

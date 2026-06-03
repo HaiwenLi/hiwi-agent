@@ -1,7 +1,6 @@
 import type {
   ChatOptions,
   ChatResponse,
-  ContentPart,
   Message,
   ModelAdapter,
   ModelCapabilities,
@@ -10,6 +9,7 @@ import type {
   ToolCall,
   ToolDefinition,
 } from "../types.js";
+import { extractText, safeJsonParse } from "./adapter-utils.js";
 
 export const MINIMAX_MODELS: Record<string, ModelCapabilities> = {
   "MiniMax-M3": { tools: true, vision: true, maxTokens: 64_000, contextWindow: 1_000_000 },
@@ -146,7 +146,7 @@ export class MiniMaxAdapter implements ModelAdapter {
     const toolCalls: ToolCall[] = (choice?.message?.tool_calls ?? []).map((tc) => ({
       id: tc.id,
       name: tc.function.name,
-      input: (() => { try { return JSON.parse(tc.function.arguments); } catch { return {}; } })(),
+      input: safeJsonParse(tc.function.arguments),
     }));
 
     const inputTk = data.usage?.prompt_tokens ?? 0;
@@ -387,7 +387,7 @@ export class MiniMaxAdapter implements ModelAdapter {
         toolCall: {
           id: tc.id,
           name: tc.name,
-          input: (() => { try { return JSON.parse(tc.arguments || "{}"); } catch { return {}; } })(),
+          input: safeJsonParse(tc.arguments),
         },
       };
     }
@@ -413,25 +413,17 @@ export class MiniMaxAdapter implements ModelAdapter {
     };
   }
 
-  private extractText(content: string | ContentPart[]): string {
-    if (typeof content === "string") return content;
-    return content
-      .filter((p): p is { type: "text"; text: string } => p.type === "text")
-      .map((p) => p.text)
-      .join("\n");
-  }
-
   private convertMessages(messages: Message[]): Array<Record<string, unknown>> {
     return messages.map((msg) => {
       switch (msg.role) {
         case "system":
-          return { role: "system", content: this.extractText(msg.content) };
+          return { role: "system", content: extractText(msg.content) };
         case "user":
-          return { role: "user", content: this.extractText(msg.content) };
+          return { role: "user", content: extractText(msg.content) };
         case "assistant": {
           const result: Record<string, unknown> = {
             role: "assistant",
-            content: msg.content || null,
+            content: msg.content ?? null,
           };
           if (msg.reasoningContent) {
             result.reasoning_content = msg.reasoningContent;
@@ -451,7 +443,7 @@ export class MiniMaxAdapter implements ModelAdapter {
         case "tool":
           return {
             role: "tool",
-            content: this.extractText(msg.content),
+            content: extractText(msg.content),
             tool_call_id: msg.toolCallId ?? "",
           };
       }

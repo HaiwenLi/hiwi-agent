@@ -75,6 +75,10 @@ export class CommandRegistry {
           if (models.length === 0) return "No models registered. Use: /model <id>";
           return models.map((m) => `  ${m.id} (${m.provider})`).join("\n");
         }
+        const available = ctx.providerRegistry.listModels();
+        if (!available.some((m) => m.id === args)) {
+          return `Unknown model: ${args}. Use /models to list available models.`;
+        }
         ctx.providerRegistry.setModel(args);
         return `Model set to: ${args}`;
       },
