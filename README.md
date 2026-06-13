@@ -207,7 +207,7 @@ All adapters support OpenAI-compatible `response_format` and `tool_choice` param
 - **Tool choice** — Control tool invocation with `tool_choice`: `"auto"`, `"none"`, `"required"`, or specific function. Anthropic uses translated enum (`"any"`/`"tool"`)
 - **Streaming tool calls** — Zhipu (GLM) models support `tool_stream: true` for real-time tool call argument streaming. DeepSeek, Kimi, and MiniMax stream tool calls natively via OpenAI-compatible `delta.tool_calls`
 
-See [docs/model_comparison.md](docs/model_comparison.md) for the full provider capability matrix and known quirks.
+See the model comparison document for the full provider capability matrix and known quirks.
 
 ## Vision (Multimodal)
 
@@ -263,10 +263,10 @@ hiwi-agent/
 │   │   ├── utils.ts    # ANSI-aware text utilities
 │   │   └── keys.ts     # Keyboard input handling (Kitty protocol)
 │   └── cli/            # Terminal UI (ChatComponent), REPL, commands, pipe mode
-├── docs/                # Documentation (model_comparison.md)
+├── docs/                # Documentation (gitignored — keep local copy)
 ├── skills/              # Built-in skills (paper-search, code-review)
 ├── config/              # Default configuration
-└── tests/               # 81 test files, 683 tests (unit + integration)
+└── tests/               # Test files (gitignored — run locally)
 ```
 
 ## Development
