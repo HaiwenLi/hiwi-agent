@@ -275,6 +275,16 @@ export class MiniMaxAdapter implements ModelAdapter {
             throw parseErr;
           }
 
+          // Capture usage BEFORE the choice guard: MiniMax sends a final
+          // usage-only chunk with an empty choices array.
+          const rawUsage = parsed.usage;
+          if (rawUsage) {
+            inputTokens = rawUsage.prompt_tokens;
+            outputTokens = rawUsage.completion_tokens;
+            cacheHitTokens = rawUsage.prompt_cache_hit_tokens ?? 0;
+            cacheMissTokens = rawUsage.prompt_cache_miss_tokens ?? 0;
+          }
+
           const choice = parsed.choices?.[0];
           if (!choice) continue;
 
@@ -355,13 +365,6 @@ export class MiniMaxAdapter implements ModelAdapter {
 
           if (choice.finish_reason) {
             finishReason = choice.finish_reason;
-          }
-
-          if (parsed.usage) {
-            inputTokens = parsed.usage.prompt_tokens;
-            outputTokens = parsed.usage.completion_tokens;
-            cacheHitTokens = parsed.usage.prompt_cache_hit_tokens ?? 0;
-            cacheMissTokens = parsed.usage.prompt_cache_miss_tokens ?? 0;
           }
         } catch (err) {
           console.error(

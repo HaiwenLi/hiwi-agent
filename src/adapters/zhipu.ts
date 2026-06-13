@@ -250,6 +250,15 @@ export class ZhipuAdapter implements ModelAdapter {
             };
           };
 
+          // Capture usage BEFORE the choice guard: Zhipu (like MiniMax) sends
+          // a final usage-only chunk with an empty choices array.
+          if (parsed.usage) {
+            inputTokens = parsed.usage.prompt_tokens;
+            outputTokens = parsed.usage.completion_tokens;
+            cacheHitTokens = parsed.usage.prompt_tokens_details?.cached_tokens ?? 0;
+            cacheMissTokens = parsed.usage.prompt_cache_miss_tokens ?? 0;
+          }
+
           const choice = parsed.choices?.[0];
           if (!choice) continue;
 
@@ -290,13 +299,6 @@ export class ZhipuAdapter implements ModelAdapter {
 
           if (choice.finish_reason) {
             finishReason = choice.finish_reason;
-          }
-
-          if (parsed.usage) {
-            inputTokens = parsed.usage.prompt_tokens;
-            outputTokens = parsed.usage.completion_tokens;
-            cacheHitTokens = parsed.usage.prompt_tokens_details?.cached_tokens ?? 0;
-            cacheMissTokens = parsed.usage.prompt_cache_miss_tokens ?? 0;
           }
         } catch {
           // skip invalid chunks
