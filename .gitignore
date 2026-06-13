@@ -16,3 +16,5 @@ tests/
 test*.json
 _fix*
 fix-*
+index.html
+memory.db
