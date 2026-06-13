@@ -139,14 +139,14 @@ export function createRepoOverviewTool(): Tool {
         const stat = await fs.stat(targetPath);
         if (!stat.isDirectory()) {
           return {
-            toolCallId: "",
+            
             content: `Path is not a directory: ${targetPath}`,
             isError: true,
           };
         }
       } catch {
         return {
-          toolCallId: "",
+          
           content: `Directory not found: ${targetPath}`,
           isError: true,
         };
@@ -235,7 +235,7 @@ export function createRepoOverviewTool(): Tool {
       sections.push(...structureLines);
 
       return {
-        toolCallId: "",
+        
         content: sections.join("\n"),
         isError: false,
         title: `Repo Overview: ${path.basename(targetPath)}`,

@@ -127,7 +127,7 @@ export function createGitTool(): Tool {
                 : null,
             ];
             return {
-              toolCallId: "",
+              
               content: lines.filter(Boolean).join("\n") || "Clean working tree.",
               isError: false,
             };
@@ -137,7 +137,7 @@ export function createGitTool(): Tool {
             const target = params.target ? ` ${params.target}` : "";
             const diff = execSync(`git diff${target}`, execOpts);
             return {
-              toolCallId: "",
+              
               content: diff.trim() || "No changes.",
               isError: false,
             };
@@ -148,7 +148,7 @@ export function createGitTool(): Tool {
             const log = execSync(`git log --oneline -n ${count}`, execOpts);
             const entries = parseGitLog(log);
             return {
-              toolCallId: "",
+              
               content: entries.length
                 ? entries.map((e) => `${e.hash} ${e.message}`).join("\n")
                 : "No commits.",
@@ -159,7 +159,7 @@ export function createGitTool(): Tool {
           case "branch": {
             const branches = execSync("git branch -a", execOpts);
             return {
-              toolCallId: "",
+              
               content: branches.trim(),
               isError: false,
             };
@@ -168,7 +168,7 @@ export function createGitTool(): Tool {
           case "add": {
             if (!params.files || params.files.length === 0) {
               return {
-                toolCallId: "",
+                
                 content: "No files specified for add.",
                 isError: true,
               };
@@ -176,7 +176,7 @@ export function createGitTool(): Tool {
             const fileList = params.files.join(" ");
             execSync(`git add ${fileList}`, execOpts);
             return {
-              toolCallId: "",
+              
               content: `Added: ${fileList}`,
               isError: false,
             };
@@ -185,7 +185,7 @@ export function createGitTool(): Tool {
           case "commit": {
             if (!params.target) {
               return {
-                toolCallId: "",
+                
                 content: "No commit message specified.",
                 isError: true,
               };
@@ -195,7 +195,7 @@ export function createGitTool(): Tool {
               execOpts,
             );
             return {
-              toolCallId: "",
+              
               content: hash.trim(),
               isError: false,
             };
@@ -204,7 +204,7 @@ export function createGitTool(): Tool {
           case "stash": {
             const stashOutput = execSync("git stash list", execOpts);
             return {
-              toolCallId: "",
+              
               content: stashOutput.trim() || "No stashes.",
               isError: false,
             };
@@ -212,7 +212,7 @@ export function createGitTool(): Tool {
 
           default:
             return {
-              toolCallId: "",
+              
               content: `Unknown action: ${params.action}`,
               isError: true,
             };
@@ -221,13 +221,13 @@ export function createGitTool(): Tool {
         const msg = error instanceof Error ? error.message : String(error);
         if (msg.includes("not a git repository")) {
           return {
-            toolCallId: "",
+            
             content: "Not a git repository. Run this in a git repository.",
             isError: true,
           };
         }
         return {
-          toolCallId: "",
+          
           content: `Git error: ${msg}`,
           isError: true,
         };

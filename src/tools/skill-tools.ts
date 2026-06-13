@@ -36,7 +36,7 @@ export function createSkillExecuteTool(
         const skillObj = skillRegistry.getByTrigger(skillTrigger);
         if (!skillObj) {
           return {
-            toolCallId: "",
+            
             content: `Skill not found: ${skillTrigger}. Available: ${skillRegistry.getTriggers().join(", ")}`,
             isError: true,
           };
@@ -61,7 +61,7 @@ export function createSkillExecuteTool(
 
         if (result.isErr()) {
           return {
-            toolCallId: "",
+            
             content: `Skill execution failed: ${result.error.message}`,
             isError: true,
           };
@@ -75,10 +75,10 @@ export function createSkillExecuteTool(
         }
         const output = texts.join("") || "Skill completed with no output.";
 
-        return { toolCallId: "", content: output, isError: false };
+        return { content: output, isError: false };
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `Skill execute error: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };
@@ -111,17 +111,17 @@ export function createSkillListTool(skillRegistry: SkillRegistry): Tool {
         });
 
         if (skills.length === 0) {
-          return { toolCallId: "", content: "No skills loaded.", isError: false };
+          return { content: "No skills loaded.", isError: false };
         }
 
         const formatted = skills
           .map((s) => `${s.trigger} [${s.type}] — ${s.description}`)
           .join("\n");
 
-        return { toolCallId: "", content: formatted, isError: false };
+        return { content: formatted, isError: false };
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `Skill list error: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };

@@ -190,17 +190,24 @@ describe("AgentLoop", () => {
     expect(finishEvent?.finishReason).toBe("max-loops");
   });
 
-  it("can be interrupted", async () => {
+  it("can be interrupted during iteration", async () => {
+    // Use an adapter that keeps returning tool calls so the loop iterates
     const adapter = new MockAdapter([
-      { content: "Working...", toolCalls: [], finishReason: "stop" },
+      { content: "", toolCalls: [{ id: "c1", name: "read_file", input: { path: "/a" } }], finishReason: "tool-calls" },
+      { content: "", toolCalls: [{ id: "c2", name: "read_file", input: { path: "/b" } }], finishReason: "tool-calls" },
     ]);
+    const readTool = makeTool("read_file");
+    toolRegistry.register(readTool);
 
-    const loop = new AgentLoop(adapter, toolRegistry, "normal", DEFAULT_CONFIG);
-    loop.interrupt();
+    const loop = new AgentLoop(adapter, toolRegistry, "yolo", DEFAULT_CONFIG);
 
     const events = [];
     for await (const event of loop.run([{ role: "user", content: "hi" }])) {
       events.push(event);
+      // Interrupt after the first tool result
+      if (event.type === "tool-result") {
+        loop.interrupt();
+      }
     }
 
     const finishEvent = events.find((e) => e.type === "finish");
@@ -326,19 +333,34 @@ describe("AgentLoop", () => {
     expect(finishEvent?.finishReason).toBe("paused");
   });
 
-  it("pausing a fresh loop before run yields paused immediately", async () => {
-    const adapter = new MockAdapter([
-      { content: "Hello", toolCalls: [], finishReason: "stop" },
-    ]);
-    const loop = new AgentLoop(adapter, toolRegistry, "normal", DEFAULT_CONFIG);
+  it("can be reused after pause — new run starts fresh", async () => {
+    const adapter = new MockAdapter(
+      [{ content: "Hello world!", toolCalls: [], finishReason: "stop" }],
+      { streamDelay: 5 },
+    );
+    const config: AgentLoopConfig = { ...DEFAULT_CONFIG, streaming: true };
+    const loop = new AgentLoop(adapter, toolRegistry, "normal", config);
 
-    // Pause before running
+    // First run: pause mid-stream
+    const firstRun = (async () => {
+      const evts: any[] = [];
+      for await (const event of loop.run([{ role: "user", content: "hi" }])) {
+        evts.push(event);
+      }
+      return evts;
+    })();
+
+    await new Promise((r) => setTimeout(r, 2));
     loop.pause();
 
-    const events = await collectEvents(loop, [{ role: "user", content: "hi" }]);
-    const finishEvent = events.find((e) => e.type === "finish");
-    expect(finishEvent?.finishReason).toBe("paused");
-    expect(events.some((e) => e.type === "text-delta")).toBe(false);
+    const firstEvents = await firstRun;
+    expect(firstEvents.find((e) => e.type === "finish")?.finishReason).toBe("paused");
+
+    // Second run on the same instance: should work normally (not stuck in paused state)
+    const secondEvents = await collectEvents(loop, [{ role: "user", content: "hello" }]);
+    const finishEvent = secondEvents.find((e) => e.type === "finish");
+    expect(finishEvent?.finishReason).toBe("completed");
+    expect(secondEvents.some((e) => e.type === "text-delta")).toBe(true);
   });
 
   it("tool errors are fed back as tool results, loop continues", async () => {

@@ -115,7 +115,7 @@ export function createGlobTool(): Tool {
           lines.length > 0 ? lines.join("\n") : `0 files matching "${pattern}" in ${basePath}`;
 
         return {
-          toolCallId: "",
+          
           content: truncated
             ? `${content}\n... (${withMtime.length} total, showing first ${MAX_RESULTS})`
             : content,
@@ -129,7 +129,7 @@ export function createGlobTool(): Tool {
         };
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `Glob error: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };

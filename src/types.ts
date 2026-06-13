@@ -22,7 +22,8 @@ export interface Message {
 }
 
 export interface ToolResult {
-  toolCallId: string;
+  /** Set by the agent loop — tools should not set this field. */
+  toolCallId?: string;
   content: string;
   isError: boolean;
   title?: string;

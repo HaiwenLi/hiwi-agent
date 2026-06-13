@@ -7,8 +7,9 @@ import type { SessionStore } from "../memory/session.js";
 import { SkillExecutor } from "../skills/executor.js";
 import type { Skill } from "../skills/loader.js";
 import type { SkillRegistry } from "../skills/registry.js";
-import { registerAgentTools, registerCoreTools, registerExtraTools } from "../tools/index.js";
+import { registerAgentFSTools, registerAgentTools, registerCoreTools, registerExtraTools } from "../tools/index.js";
 import type { AgentLoopConfig, Message, PermissionMode } from "../types.js";
+import type { AgentFS } from "../agentfs/index.js";
 import type { CommandContext, CommandRegistry } from "./commands.js";
 
 export interface REPLDependencies {
@@ -31,6 +32,7 @@ export interface REPLDependencies {
   onStatusBarUpdate?: (data: import("../types.js").TokenUsage) => void;
   requestModeSwitch?: (mode: string) => void;
   promptInput?: (label: string) => Promise<string>;
+  agentfs?: AgentFS;
 }
 
 export class REPL {
@@ -65,6 +67,9 @@ export class REPL {
       loopConfig: deps.loopConfig,
       permissionMode: () => deps.permissionMode.value,
     });
+    if (deps.agentfs) {
+      registerAgentFSTools(deps.toolRegistry, deps.agentfs);
+    }
   }
 
   async processInput(input: string): Promise<string> {
@@ -96,21 +101,36 @@ export class REPL {
       if (lower === "y" || lower === "yes") {
         this.approvedTools.add(toolName);
         this.deps.onOutput(`[Permission granted for ${toolName}]\n`);
-        if (toolInput) {
-          const ctx = { workingDirectory: process.cwd(), sessionId: this.sessionId ?? "default" };
-          const realResult = await this.deps.toolRegistry.execute(
-            toolName,
-            toolInput,
-            ctx,
-            "yolo",
-          );
-          this.deps.onOutput(`[Result]\n${realResult.content}\n`);
-          if (toolCallId) {
-            this.messages.push({
-              role: "tool",
-              content: realResult.content,
-              toolCallId,
-            });
+
+        // Push tool results for ALL tool calls in the batch:
+        // - The previously-executed ones get placeholder success results
+        // - The denied tool gets re-executed with permission granted
+        if (toolCalls && toolCalls.length > 0) {
+          for (const tc of toolCalls) {
+            if (tc.id === toolCallId) {
+              // Re-execute the denied tool now that permission is granted
+              const ctx = { workingDirectory: process.cwd(), sessionId: this.sessionId ?? "default" };
+              const realResult = await this.deps.toolRegistry.execute(
+                tc.name,
+                tc.input,
+                ctx,
+                "yolo",
+              );
+              this.deps.onOutput(`[Result]\n${realResult.content}\n`);
+              this.messages.push({
+                role: "tool",
+                content: realResult.content,
+                toolCallId: tc.id,
+              });
+            } else {
+              // Other tool calls in the batch already executed during the original loop run.
+              // Push a placeholder result so the message history has matching tool results.
+              this.messages.push({
+                role: "tool",
+                content: `[Tool ${tc.name} result was already captured in previous iteration]`,
+                toolCallId: tc.id,
+              });
+            }
           }
         }
         this.deps.onOutput("\n[Continuing...]\n");
@@ -119,12 +139,18 @@ export class REPL {
       if (lower === "n" || lower === "no") {
         this.deniedTools.push(toolName);
         this.deps.onOutput(`[Permission denied for ${toolName}]\n`);
-        if (toolCallId) {
-          this.messages.push({
-            role: "tool",
-            content: `Permission denied for tool: ${toolName}`,
-            toolCallId,
-          });
+        // Push error results for ALL tool calls in the batch so the message
+        // history has a tool result for every tool call in the assistant message
+        if (toolCalls && toolCalls.length > 0) {
+          for (const tc of toolCalls) {
+            this.messages.push({
+              role: "tool",
+              content: tc.id === toolCallId
+                ? `Permission denied for tool: ${toolName}`
+                : `[Tool ${tc.name} was part of a batch that was denied]`,
+              toolCallId: tc.id,
+            });
+          }
         }
         return `Permission denied for ${toolName}`;
       }
@@ -148,6 +174,10 @@ export class REPL {
       this.pendingToolCallId = null;
       this.pendingToolCalls = null;
       this.pendingAssistantContent = null;
+      this.cumulativeInputTokens = 0;
+      this.cumulativeOutputTokens = 0;
+      this.cumulativeCacheRead = 0;
+      this.cumulativeCacheWrite = 0;
       this.deps.onOutput("[New Session] Context cleared. Ready for a fresh start.\n");
       return "[New Session]";
     }
@@ -213,6 +243,9 @@ export class REPL {
       this.deps.toolRegistry,
       this.deps.permissionMode.value,
       loopConfig,
+      undefined,
+      undefined,
+      this.deps.agentfs,
     );
     this.currentLoop = loop;
 

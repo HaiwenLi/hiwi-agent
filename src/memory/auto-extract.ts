@@ -1,3 +1,4 @@
+import { extractText } from "../adapters/adapter-utils.js";
 import type { Message, ModelAdapter } from "../types.js";
 import type { MemoryFileStore } from "./file-store.js";
 
@@ -44,14 +45,17 @@ export class AutoExtractor {
     const lastAssistant = messages.filter((m) => m.role === "assistant").at(-1);
     if (!lastUser || !lastAssistant) return [];
 
-    const isShort = lastUser.content.length < 10 && lastAssistant.content.length < 10;
+    const userText = extractText(lastUser.content);
+    const assistantText = extractText(lastAssistant.content);
+
+    const isShort = userText.length < 10 && assistantText.length < 10;
     if (isShort) return [];
 
     let raw: ExtractedFact[];
     try {
       const response = await this.llm.chat([
         { role: "system", content: EXTRACTION_PROMPT },
-        { role: "user", content: `User: ${lastUser.content}\nAssistant: ${lastAssistant.content}` },
+        { role: "user", content: `User: ${userText}\nAssistant: ${assistantText}` },
       ]);
       raw = JSON.parse(response.content);
     } catch {

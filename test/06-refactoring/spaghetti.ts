@@ -51,7 +51,7 @@ export function validatePhone(phone: string): boolean {
   const digits = phone.replace(/\s|-/g, '');
   if (digits.length !== 11) return false;
   if (!/^\d+$/.test(digits)) return false;
-  if (!digits.startsWith('1')) return false;
+  if (!/^1[3-9]\d{9}$/.test(digits)) return false;
   return true;
 }
 

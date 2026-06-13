@@ -48,7 +48,7 @@ export function createAcademicSearchTool(): Tool {
 
         if (!response.ok) {
           return {
-            toolCallId: "",
+            
             content: `Semantic Scholar API error: HTTP ${response.status}`,
             isError: true,
           };
@@ -69,7 +69,7 @@ export function createAcademicSearchTool(): Tool {
         const papers = data.data ?? [];
         if (papers.length === 0) {
           return {
-            toolCallId: "",
+            
             content: "No papers found. Try a broader query.",
             isError: false,
           };
@@ -102,13 +102,13 @@ export function createAcademicSearchTool(): Tool {
         });
 
         return {
-          toolCallId: "",
+          
           content: lines.join("\n\n"),
           isError: false,
         };
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `Error searching papers: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };

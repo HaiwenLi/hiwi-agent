@@ -72,7 +72,7 @@ export function fibMatrix(n: number): bigint {
   
   let exp = n;
   while (exp > 0) {
-    if (exp & 1n) {
+    if (exp & 1) {
       const r0 = result0 * base0 + result1 * base2;
       const r1 = result0 * base1 + result1 * base3;
       const r2 = result2 * base0 + result3 * base2;
@@ -84,7 +84,7 @@ export function fibMatrix(n: number): bigint {
     const b2 = base2 * base0 + base3 * base2;
     const b3 = base2 * base1 + base3 * base3;
     base0 = b0; base1 = b1; base2 = b2; base3 = b3;
-    exp >>= 1n;
+    exp >>= 1;
   }
   
   // result = [[F(n+1), F(n)], [F(n), F(n-1)]] → result0[1] = F(n)

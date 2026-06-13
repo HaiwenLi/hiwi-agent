@@ -68,7 +68,7 @@ export function createEditTool(): Tool {
         return await executeSingle(filePath, content, oldString, newString);
       } catch {
         return {
-          toolCallId: "",
+          
           content: `File not found: ${filePath}`,
           isError: true,
         };
@@ -86,7 +86,7 @@ async function executeSingle(
   const exactCount = countOccurrences(content, oldString);
   if (exactCount > 1) {
     return {
-      toolCallId: "",
+      
       content: `oldString found ${exactCount} times in ${filePath}. Use replaceAll: true to replace all occurrences, or provide more context to make the match unique.`,
       isError: true,
       title: `Edit ${path.basename(filePath)}`,
@@ -100,7 +100,7 @@ async function executeSingle(
       await fs.writeFile(filePath, updated, "utf-8");
 
       return {
-        toolCallId: "",
+        
         content: `Replaced in ${filePath}`,
         isError: false,
         title: `Edit ${path.basename(filePath)}`,
@@ -109,7 +109,7 @@ async function executeSingle(
   }
 
   return {
-    toolCallId: "",
+    
     content: `oldString not found in ${filePath}. The text you provided doesn't match any portion of the file. Please read the file first to see its exact content.`,
     isError: true,
     title: `Edit ${path.basename(filePath)}`,
@@ -125,7 +125,7 @@ async function executeReplaceAll(
   const count = countOccurrences(content, oldString);
   if (count === 0) {
     return {
-      toolCallId: "",
+      
       content: `oldString not found in ${filePath}`,
       isError: true,
       title: `Edit ${path.basename(filePath)}`,
@@ -136,7 +136,7 @@ async function executeReplaceAll(
   await fs.writeFile(filePath, updated, "utf-8");
 
   return {
-    toolCallId: "",
+    
     content: `Replaced ${count} occurrences in ${filePath}`,
     isError: false,
     title: `Edit ${path.basename(filePath)} (${count} replacements)`,

@@ -50,7 +50,7 @@ export function createBashTool(truncationDir?: string): Tool {
 
         if (result.exitCode !== 0) {
           return {
-            toolCallId: "",
+            
             content:
               result.stderr || result.stdout || `Command exited with code ${result.exitCode}`,
             isError: true,
@@ -63,7 +63,7 @@ export function createBashTool(truncationDir?: string): Tool {
         const truncated = truncation.truncate(output);
 
         return {
-          toolCallId: "",
+          
           content: truncated.type === "full" ? truncated.text : truncated.preview,
           isError: false,
           title: `Bash: ${title}`,
@@ -71,7 +71,7 @@ export function createBashTool(truncationDir?: string): Tool {
         };
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `Command error: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };
@@ -123,6 +123,13 @@ function runCommand(
 
     let stdout = "";
     let stderr = "";
+    let resolved = false;
+
+    const doResolve = (result: CommandResult) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(result);
+    };
 
     child.stdout.on("data", (data: Buffer) => {
       stdout += data.toString("utf-8");
@@ -134,14 +141,14 @@ function runCommand(
 
     const timer = setTimeout(() => {
       child.kill("SIGTERM");
-      resolve({ exitCode: 1, stdout, stderr: `Command timed out after ${timeout}ms` });
+      doResolve({ exitCode: 1, stdout, stderr: `Command timed out after ${timeout}ms` });
     }, timeout);
 
     if (abort) {
       const onAbort = () => {
         clearTimeout(timer);
         child.kill("SIGTERM");
-        resolve({ exitCode: 1, stdout, stderr: "Command aborted" });
+        doResolve({ exitCode: 1, stdout, stderr: "Command aborted" });
       };
       if (abort.aborted) {
         clearTimeout(timer);
@@ -153,12 +160,12 @@ function runCommand(
 
     child.on("close", (code) => {
       clearTimeout(timer);
-      resolve({ exitCode: code ?? 1, stdout, stderr });
+      doResolve({ exitCode: code ?? 1, stdout, stderr });
     });
 
     child.on("error", (err) => {
       clearTimeout(timer);
-      resolve({ exitCode: 1, stdout, stderr: err.message });
+      doResolve({ exitCode: 1, stdout, stderr: err.message });
     });
   });
 }

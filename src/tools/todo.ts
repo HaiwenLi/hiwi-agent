@@ -46,14 +46,14 @@ export function createTodoTool(): Tool {
       for (const todo of todos) {
         if (todo.status !== undefined && !todoStore.isValidStatus(todo.status)) {
           return {
-            toolCallId: "",
+            
             content: `Invalid status: "${todo.status}". Must be one of: pending, in_progress, completed, cancelled.`,
             isError: true,
           };
         }
         if (todo.priority !== undefined && !todoStore.isValidPriority(todo.priority)) {
           return {
-            toolCallId: "",
+            
             content: `Invalid priority: "${todo.priority}". Must be one of: high, medium, low.`,
             isError: true,
           };
@@ -79,7 +79,7 @@ export function createTodoTool(): Tool {
       ).length;
 
       return {
-        toolCallId: "",
+        
         content: lines.join("\n"),
         isError: false,
         title: `Todo: ${pendingCount} pending`,

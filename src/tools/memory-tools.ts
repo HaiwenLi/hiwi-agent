@@ -31,24 +31,24 @@ export function createMemorySearchTool(memoryManager: MemoryManager): Tool {
         const result = await memoryManager.recall(query, { type, limit });
         if (result.isErr()) {
           return {
-            toolCallId: "",
+            
             content: `Memory search failed: ${result.error.message}`,
             isError: true,
           };
         }
 
         if (result.value.length === 0) {
-          return { toolCallId: "", content: "No memories found.", isError: false };
+          return { content: "No memories found.", isError: false };
         }
 
         const formatted = result.value
           .map((m) => `[${m.name}] (${m.type}, score: ${m.score.toFixed(2)})\n${m.content}`)
           .join("\n\n");
 
-        return { toolCallId: "", content: formatted, isError: false };
+        return { content: formatted, isError: false };
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `Memory search error: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };
@@ -87,16 +87,16 @@ export function createMemoryAddTool(memoryManager: MemoryManager): Tool {
         const result = await memoryManager.remember(name, type ?? "knowledge", name, content);
         if (result.isErr()) {
           return {
-            toolCallId: "",
+            
             content: `Failed to save memory: ${result.error.message}`,
             isError: true,
           };
         }
 
-        return { toolCallId: "", content: `Saved memory: ${name}`, isError: false };
+        return { content: `Saved memory: ${name}`, isError: false };
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `Memory add error: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };
@@ -118,10 +118,10 @@ export function createMemoryGetContextTool(memoryManager: MemoryManager): Tool {
     async execute(_input: unknown, _ctx: ToolContext): Promise<ToolResult> {
       try {
         const context = await memoryManager.getSystemContext();
-        return { toolCallId: "", content: context, isError: false };
+        return { content: context, isError: false };
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `Failed to get memory context: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };
@@ -150,16 +150,16 @@ export function createMemoryForgetTool(memoryManager: MemoryManager): Tool {
         const result = await memoryManager.forget(name);
         if (result.isErr()) {
           return {
-            toolCallId: "",
+            
             content: `Failed to forget memory: ${result.error.message}`,
             isError: true,
           };
         }
 
-        return { toolCallId: "", content: `Forgot memory: ${name}`, isError: false };
+        return { content: `Forgot memory: ${name}`, isError: false };
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `Memory forget error: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };

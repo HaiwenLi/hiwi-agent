@@ -208,14 +208,20 @@ export function visibleWidth(str: string): number {
 		return str.length;
 	}
 
-	// Check cache
-	const cached = widthCache.get(str);
+	// Normalize terminal output BEFORE caching so the width corresponds
+	// to the actual rendered form (e.g. Thai/Lao decomposition).
+	// The decomposition has the same cell width as the original, so this
+	// is a consistency measure to avoid cache-key vs rendered-text mismatches.
+	const normalized = normalizeTerminalOutput(str);
+
+	// Check cache (on the normalized form)
+	const cached = widthCache.get(normalized);
 	if (cached !== undefined) {
 		return cached;
 	}
 
 	// Normalize: tabs to 3 spaces, strip ANSI escape codes
-	let clean = str;
+	let clean = normalized;
 	if (str.includes("\t")) {
 		clean = clean.replace(/\t/g, "   ");
 	}
@@ -250,7 +256,7 @@ export function visibleWidth(str: string): number {
 			widthCache.delete(firstKey);
 		}
 	}
-	widthCache.set(str, width);
+	widthCache.set(normalized, width);
 
 	return width;
 }

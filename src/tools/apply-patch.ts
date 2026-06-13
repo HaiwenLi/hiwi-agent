@@ -28,7 +28,7 @@ export function createApplyPatchTool(): Tool {
 
       if (!patch) {
         return {
-          toolCallId: "",
+          
           content: "Missing required parameter: patch",
           isError: true,
         };
@@ -39,7 +39,7 @@ export function createApplyPatchTool(): Tool {
         hunks = parsePatch(patch);
       } catch (err) {
         return {
-          toolCallId: "",
+          
           content: `Parse error: ${err instanceof Error ? err.message : String(err)}`,
           isError: true,
         };
@@ -105,7 +105,7 @@ export function createApplyPatchTool(): Tool {
       }
 
       return {
-        toolCallId: "",
+        
         content,
         isError: errors.length > 0,
         title: "Apply Patch",

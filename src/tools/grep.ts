@@ -82,7 +82,7 @@ export function createGrepTool(): Tool {
         searchRegex = new RegExp(pattern);
       } catch {
         return {
-          toolCallId: "",
+          
           content: `Invalid regex pattern: ${pattern}`,
           isError: true,
         };
@@ -118,7 +118,7 @@ export function createGrepTool(): Tool {
 
         if (matches.length === 0) {
           return {
-            toolCallId: "",
+            
             content: `0 matches for "${pattern}" in ${basePath}`,
             isError: false,
             title: `Grep "${pattern}" (0 matches)`,
@@ -134,7 +134,7 @@ export function createGrepTool(): Tool {
           : lines.join("\n");
 
         return {
-          toolCallId: "",
+          
           content,
           isError: false,
           title: `Grep "${pattern}" (${matches.length} matches)`,
@@ -145,7 +145,7 @@ export function createGrepTool(): Tool {
         };
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `Grep error: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };

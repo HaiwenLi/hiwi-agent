@@ -80,7 +80,7 @@ export function createTaskTool(): Tool {
         case "start": {
           if (!command) {
             return {
-              toolCallId: "",
+              
               content: "Error: 'command' parameter is required for 'start' action.",
               isError: true,
             };
@@ -140,7 +140,7 @@ export function createTaskTool(): Tool {
           tasks.set(id, bgTask);
 
           return {
-            toolCallId: "",
+            
             content: `Task started: ${id}\nCommand: ${command}`,
             isError: false,
             metadata: { taskId: id, status: "running" },
@@ -159,20 +159,20 @@ export function createTaskTool(): Tool {
             }));
 
             if (allTasks.length === 0) {
-              return { toolCallId: "", content: "No active tasks.", isError: false };
+              return { content: "No active tasks.", isError: false };
             }
 
             const formatted = allTasks
               .map((t) => `  ${t.id.slice(0, 16)}... [${t.status}] ${t.runtime} — ${t.command}`)
               .join("\n");
 
-            return { toolCallId: "", content: `Active tasks:\n${formatted}`, isError: false };
+            return { content: `Active tasks:\n${formatted}`, isError: false };
           }
 
           const task = tasks.get(taskId);
           if (!task) {
             return {
-              toolCallId: "",
+              
               content: `Task not found: ${taskId}. It may have been cleaned up.`,
               isError: true,
             };
@@ -180,7 +180,7 @@ export function createTaskTool(): Tool {
 
           const runtime = `${Math.round((Date.now() - task.startTime) / 1000)}s`;
           return {
-            toolCallId: "",
+            
             content: `Task ${taskId}: ${task.status} (exit code: ${task.exitCode ?? "N/A"}, runtime: ${runtime})`,
             isError: false,
             metadata: { taskId, status: task.status, exitCode: task.exitCode },
@@ -190,7 +190,7 @@ export function createTaskTool(): Tool {
         case "output": {
           if (!taskId) {
             return {
-              toolCallId: "",
+              
               content: "Error: 'taskId' parameter is required for 'output' action.",
               isError: true,
             };
@@ -199,7 +199,7 @@ export function createTaskTool(): Tool {
           const task = tasks.get(taskId);
           if (!task) {
             return {
-              toolCallId: "",
+              
               content: `Task not found: ${taskId}. It may have been cleaned up.`,
               isError: true,
             };
@@ -209,7 +209,7 @@ export function createTaskTool(): Tool {
 
           if (!output && task.stderr) {
             return {
-              toolCallId: "",
+              
               content: task.stderr.slice(offset) || "(empty stderr)",
               isError: task.status === "failed",
               metadata: { taskId, offset, totalLength: task.stdout.length },
@@ -217,7 +217,7 @@ export function createTaskTool(): Tool {
           }
 
           return {
-            toolCallId: "",
+            
             content: output || "(no output yet)",
             isError: false,
             metadata: {
@@ -232,7 +232,7 @@ export function createTaskTool(): Tool {
         case "stop": {
           if (!taskId) {
             return {
-              toolCallId: "",
+              
               content: "Error: 'taskId' parameter is required for 'stop' action.",
               isError: true,
             };
@@ -241,7 +241,7 @@ export function createTaskTool(): Tool {
           const task = tasks.get(taskId);
           if (!task) {
             return {
-              toolCallId: "",
+              
               content: `Task not found: ${taskId}. It may have already been cleaned up.`,
               isError: true,
             };
@@ -256,7 +256,7 @@ export function createTaskTool(): Tool {
           }
 
           return {
-            toolCallId: "",
+            
             content: `Task stopped: ${taskId}\nFinal output:\n${task.stdout.slice(-2000)}`,
             isError: false,
             metadata: { taskId, finalStatus: "stopped" },
@@ -265,7 +265,7 @@ export function createTaskTool(): Tool {
 
         default:
           return {
-            toolCallId: "",
+            
             content: `Unknown action: ${effectiveAction}`,
             isError: true,
           };

@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { ProviderRegistry } from "../adapters/registry.js";
 import { loadConfig, saveModelSelection, saveProviderConfig } from "../core/config.js";
+import { AgentFS } from "../agentfs/index.js";
 import { ToolRegistry } from "../core/tools.js";
 import { MCPServer } from "../mcp/server.js";
 import { MemoryFileStore } from "../memory/file-store.js";
@@ -155,6 +156,10 @@ export async function main(options: CLIOptions = {}): Promise<void> {
   const commandRegistry = new CommandRegistry();
   commandRegistry.registerBuiltinCommands();
 
+  // Initialize AgentFS for REPL mode (virtual fs, kv store, audit trail)
+  const agentfs = new AgentFS(path.join(sessionDir, "agentfs.db"));
+  agentfs.init();
+
   let repl: REPL | null = null;
 
   const app = createApp({
@@ -210,6 +215,7 @@ export async function main(options: CLIOptions = {}): Promise<void> {
       }
     },
     promptInput: (label: string) => app.promptInput(label),
+    agentfs,
   });
 
   // Show initial status bar with provider/model info
@@ -222,6 +228,7 @@ export async function main(options: CLIOptions = {}): Promise<void> {
   app.setStatusBarData(initialStatus);
 
   await app.waitUntilExit();
+  agentfs.close();
   sessionStore.close();
 }
 

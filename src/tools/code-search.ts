@@ -151,7 +151,7 @@ export function createCodeSearchTool(): Tool {
         const files = await findFiles(searchDir, filePattern);
         if (files.length === 0) {
           return {
-            toolCallId: "",
+            
             content: `No files found matching pattern: ${filePattern}`,
             isError: false,
           };
@@ -208,7 +208,7 @@ export function createCodeSearchTool(): Tool {
 
         if (matches.length === 0) {
           return {
-            toolCallId: "",
+            
             content: `No symbols matching "${query}" found.`,
             isError: false,
           };
@@ -220,14 +220,14 @@ export function createCodeSearchTool(): Tool {
           .join("\n\n");
 
         return {
-          toolCallId: "",
+          
           content: formatted,
           isError: false,
           metadata: { matchCount: matches.length },
         };
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `Code search error: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };

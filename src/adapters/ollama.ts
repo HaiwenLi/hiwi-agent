@@ -149,12 +149,17 @@ export class OllamaAdapter implements ModelAdapter {
     let hasToolCalls = false;
 
     try {
+      let buffer = "";
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const text = decoder.decode(value, { stream: true });
-        for (const line of text.split("\n")) {
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        // Keep the last (potentially incomplete) line in the buffer
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
           if (!line.trim()) continue;
           try {
             const chunk = JSON.parse(line) as {
@@ -239,6 +244,30 @@ export class OllamaAdapter implements ModelAdapter {
           } catch {
             // skip malformed lines
           }
+        }
+      }
+      // Process any remaining data in the buffer after the stream ends
+      if (buffer.trim()) {
+        try {
+          const chunk = JSON.parse(buffer);
+          if (chunk && chunk.done) {
+            this.lastUsage = enrichUsage(
+              buildNormalizedUsage('ollama', {
+                prompt_eval_count: chunk.prompt_eval_count,
+                eval_count: chunk.eval_count,
+              }),
+              this.capabilities.contextWindow,
+              this.id,
+              this.provider,
+            );
+            yield {
+              type: 'finish',
+              finishReason: 'stop',
+              usage: this.lastUsage,
+            };
+          }
+        } catch {
+          // skip malformed trailing data
         }
       }
     } finally {

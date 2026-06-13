@@ -47,7 +47,7 @@ export function createReadImageTool(): Tool {
       const mime = getMimeType(filePath);
       if (!mime) {
         return {
-          toolCallId: "",
+          
           content: `Unsupported image type: ${filePath}. Supported: .png, .jpg, .jpeg, .gif, .webp`,
           isError: true,
         };
@@ -70,7 +70,7 @@ export function createReadImageTool(): Tool {
         ];
 
         return {
-          toolCallId: "",
+          
           content: JSON.stringify(contentParts),
           isError: false,
           title: filename,
@@ -78,7 +78,7 @@ export function createReadImageTool(): Tool {
         };
       } catch {
         return {
-          toolCallId: "",
+          
           content: `File not found or cannot be read: ${filePath}`,
           isError: true,
         };

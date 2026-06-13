@@ -107,20 +107,43 @@ export class AnthropicAdapter implements ModelAdapter {
       { signal },
     );
 
+    // Accumulate tool-call input_json_delta fragments; emit tool-call only when complete
+    const pendingToolCalls = new Map<number, { id: string; name: string; inputJson: string }>();
+
     for await (const event of stream) {
       if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
         yield { type: "text-delta", text: event.delta.text };
       } else if (event.type === "content_block_delta" && event.delta.type === "thinking_delta") {
         yield { type: "reasoning-delta", text: (event.delta as any).thinking as string };
       } else if (event.type === "content_block_start" && event.content_block.type === "tool_use") {
-        yield {
-          type: "tool-call",
-          toolCall: {
-            id: event.content_block.id,
-            name: event.content_block.name,
-            input: event.content_block.input as Record<string, unknown>,
-          },
-        };
+        // Record tool metadata; actual input arrives via input_json_delta events
+        pendingToolCalls.set(event.index, {
+          id: event.content_block.id,
+          name: event.content_block.name,
+          inputJson: "",
+        });
+      } else if (event.type === "content_block_delta" && event.delta.type === "input_json_delta") {
+        // Accumulate incremental JSON fragments for the active tool-call
+        const entry = pendingToolCalls.get(event.index);
+        if (entry) {
+          entry.inputJson += (event.delta as any).partial_json as string;
+        }
+      } else if (event.type === "content_block_stop") {
+        // Content block finished — emit the accumulated tool-call if we have one
+        const entry = pendingToolCalls.get(event.index);
+        if (entry) {
+          let input: Record<string, unknown>;
+          try {
+            input = JSON.parse(entry.inputJson || "{}");
+          } catch {
+            input = {};
+          }
+          yield {
+            type: "tool-call",
+            toolCall: { id: entry.id, name: entry.name, input },
+          };
+          pendingToolCalls.delete(event.index);
+        }
       }
     }
 

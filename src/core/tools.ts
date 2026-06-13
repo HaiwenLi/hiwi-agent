@@ -42,19 +42,18 @@ export class ToolRegistry {
   ): Promise<ToolResult> {
     const tool = this.tools.get(name);
     if (!tool) {
-      return { toolCallId: "", content: `Tool not found: ${name}`, isError: true };
+      return { content: `Tool not found: ${name}`, isError: true };
     }
 
     const permitted = await this.checkPermission(tool, permissionMode);
     if (!permitted) {
-      return { toolCallId: "", content: `Permission denied for tool: ${name}`, isError: true };
+      return { content: `Permission denied for tool: ${name}`, isError: true };
     }
 
     try {
       return await tool.execute(input, context);
     } catch (error) {
       return {
-        toolCallId: "",
         content: `Tool execution error: ${error instanceof Error ? error.message : String(error)}`,
         isError: true,
       };

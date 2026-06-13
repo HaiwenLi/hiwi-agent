@@ -25,7 +25,7 @@ export function createWriteTool(): Tool {
 
       if (content === undefined) {
         return {
-          toolCallId: "",
+          
           content: "Missing required parameter: content",
           isError: true,
         };
@@ -40,14 +40,14 @@ export function createWriteTool(): Tool {
         await fs.writeFile(filePath, content, "utf-8");
 
         return {
-          toolCallId: "",
+          
           content: `Wrote ${Buffer.byteLength(content, "utf-8")} bytes to ${filePath}`,
           isError: false,
           title: `Write ${path.basename(filePath)}`,
         };
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `Write error: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };

@@ -127,6 +127,11 @@ export class AgentLoop {
   }
 
   async *run(messages: Message[]): AsyncGenerator<AgentLoopEvent> {
+    // Reset abort/interrupt state so this instance can be reused after pause()
+    this.abortController = new AbortController();
+    this.interrupted = false;
+    this._paused = false;
+
     const budget = new IterationBudget(this.config.budgetTotal, this.config.refundableTools);
     const ctx: ToolContext = this.context ?? {
       workingDirectory: process.cwd(),

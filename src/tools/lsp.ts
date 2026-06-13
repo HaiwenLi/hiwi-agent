@@ -222,7 +222,7 @@ export function createLspTool(): Tool {
       // Validate operation
       if (!operation || !VALID_OPERATIONS.includes(operation as LspOperation)) {
         return {
-          toolCallId: "",
+          
           content: `Invalid or missing operation. Must be one of: ${VALID_OPERATIONS.join(", ")}`,
           isError: true,
         };
@@ -231,7 +231,7 @@ export function createLspTool(): Tool {
       // Validate filePath
       if (!filePath) {
         return {
-          toolCallId: "",
+          
           content: "Missing required parameter: filePath",
           isError: true,
         };
@@ -247,7 +247,7 @@ export function createLspTool(): Tool {
         await fs.access(resolvedPath);
       } catch {
         return {
-          toolCallId: "",
+          
           content: `File not found: ${resolvedPath}`,
           isError: true,
         };
@@ -259,7 +259,7 @@ export function createLspTool(): Tool {
         client = await getOrCreateClient(ctx.workingDirectory, resolvedPath);
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `LSP server error: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };
@@ -281,7 +281,7 @@ export function createLspTool(): Tool {
         client.process.stdin?.write(encodeMessage(didOpen));
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `Failed to open document: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };
@@ -300,7 +300,7 @@ export function createLspTool(): Tool {
           const result = await sendRequest(client, req, 10000);
           const symbols = result as DocumentSymbol[] | null;
           return {
-            toolCallId: "",
+            
             content:
               symbols && symbols.length > 0 ? formatSymbols(symbols) : "No document symbols found",
             isError: false,
@@ -308,7 +308,7 @@ export function createLspTool(): Tool {
           };
         } catch (error) {
           return {
-            toolCallId: "",
+            
             content: `LSP request failed: ${error instanceof Error ? error.message : String(error)}`,
             isError: true,
           };
@@ -318,7 +318,7 @@ export function createLspTool(): Tool {
       // Other operations require line and character
       if (line === undefined || character === undefined) {
         return {
-          toolCallId: "",
+          
           content: `Operation "${operation}" requires line and character parameters`,
           isError: true,
         };
@@ -346,7 +346,7 @@ export function createLspTool(): Tool {
               10000,
             );
             return {
-              toolCallId: "",
+              
               content: formatLocations(result as Location | Location[] | null),
               isError: false,
               title: `LSP goToDefinition ${path.basename(resolvedPath)}:${line}:${character}`,
@@ -368,7 +368,7 @@ export function createLspTool(): Tool {
               10000,
             );
             return {
-              toolCallId: "",
+              
               content: formatLocations(result as Location[] | null),
               isError: false,
               title: `LSP findReferences ${path.basename(resolvedPath)}:${line}:${character}`,
@@ -389,7 +389,7 @@ export function createLspTool(): Tool {
               10000,
             );
             return {
-              toolCallId: "",
+              
               content: formatHover(result as HoverResult | null),
               isError: false,
               title: `LSP hover ${path.basename(resolvedPath)}:${line}:${character}`,
@@ -410,7 +410,7 @@ export function createLspTool(): Tool {
               10000,
             );
             return {
-              toolCallId: "",
+              
               content: formatLocations(result as Location | Location[] | null),
               isError: false,
               title: `LSP goToImplementation ${path.basename(resolvedPath)}:${line}:${character}`,
@@ -418,14 +418,14 @@ export function createLspTool(): Tool {
 
           default:
             return {
-              toolCallId: "",
+              
               content: `Unknown operation: ${operation}`,
               isError: true,
             };
         }
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `LSP request failed: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };

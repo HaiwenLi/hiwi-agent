@@ -78,7 +78,7 @@ export function createWebFetchTool(): Tool {
       // Validate URL scheme
       if (!url || !/^https?:\/\//i.test(url)) {
         return {
-          toolCallId: "",
+          
           content: `Invalid URL: only http and https URLs are supported. Got: ${url}`,
           isError: true,
         };
@@ -98,7 +98,7 @@ export function createWebFetchTool(): Tool {
         // Check for HTTP errors
         if (!response.ok) {
           return {
-            toolCallId: "",
+            
             content: `HTTP error ${response.status}: ${response.statusText}`,
             isError: true,
             title: new URL(url).hostname,
@@ -109,7 +109,7 @@ export function createWebFetchTool(): Tool {
         const contentLength = response.headers.get("content-length");
         if (contentLength && Number(contentLength) > MAX_CONTENT_SIZE) {
           return {
-            toolCallId: "",
+            
             content: `Response too large: content-length ${contentLength} bytes exceeds 5 MB limit`,
             isError: true,
             title: new URL(url).hostname,
@@ -123,7 +123,7 @@ export function createWebFetchTool(): Tool {
         // Image content types — show placeholder
         if (contentType.startsWith("image/")) {
           return {
-            toolCallId: "",
+            
             content: `[Image: ${contentType} from ${url}]`,
             isError: false,
             title: hostname,
@@ -135,7 +135,7 @@ export function createWebFetchTool(): Tool {
         // Check actual body size
         if (body.length > MAX_CONTENT_SIZE) {
           return {
-            toolCallId: "",
+            
             content: `Response too large: ${body.length} bytes exceeds 5 MB limit`,
             isError: true,
             title: hostname,
@@ -148,7 +148,7 @@ export function createWebFetchTool(): Tool {
 
         if (!isHTML && format !== "html") {
           return {
-            toolCallId: "",
+            
             content: body,
             isError: false,
             title: hostname,
@@ -170,7 +170,7 @@ export function createWebFetchTool(): Tool {
         }
 
         return {
-          toolCallId: "",
+          
           content,
           isError: false,
           title: hostname,
@@ -178,7 +178,7 @@ export function createWebFetchTool(): Tool {
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === "AbortError") {
           return {
-            toolCallId: "",
+            
             content: `Request timeout after ${timeoutMs}ms`,
             isError: true,
             title: new URL(url).hostname,
@@ -187,7 +187,7 @@ export function createWebFetchTool(): Tool {
 
         const message = err instanceof Error ? err.message : String(err);
         return {
-          toolCallId: "",
+          
           content: `Fetch failed: ${message}`,
           isError: true,
           title: new URL(url).hostname,

@@ -52,7 +52,7 @@ export function createWebSearchTool(): Tool {
 
       if (!query || query.trim().length === 0) {
         return {
-          toolCallId: "",
+          
           content: "Error: query is required and must be a non-empty string",
           isError: true,
         };
@@ -84,7 +84,7 @@ export function createWebSearchTool(): Tool {
 
         if (!response.ok) {
           return {
-            toolCallId: "",
+            
             content: `Search API error: ${response.status} ${response.statusText}`,
             isError: true,
           };
@@ -103,7 +103,7 @@ export function createWebSearchTool(): Tool {
         const preview = query.length > 50 ? `${query.slice(0, 50)}...` : query;
 
         return {
-          toolCallId: "",
+          
           content: formatSearchResults(results),
           isError: false,
           title: `Search "${preview}" (${results.length} results)`,
@@ -112,7 +112,7 @@ export function createWebSearchTool(): Tool {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return {
-          toolCallId: "",
+          
           content: `Search error: ${message}`,
           isError: true,
         };

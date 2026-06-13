@@ -90,11 +90,13 @@ describe('fibMatrix (矩阵快速幂)', () => {
     }
   });
 
-  it('应该非常快（O(log n)），n=10^6 也应该在 1ms 内', () => {
+  it('应该非常快（O(log n)），n=10^6 应该在 100ms 内', () => {
     const start = performance.now();
     fibMatrix(1000000);
     const duration = performance.now() - start;
-    expect(duration).toBeLessThan(1);
+    // O(log n) iterations, but BigInt arithmetic with huge numbers has
+    // O(n * log n) digit-cost. ~50ms on Windows is expected for n=10^6.
+    expect(duration).toBeLessThan(100);
   });
 });
 

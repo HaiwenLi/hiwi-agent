@@ -44,7 +44,7 @@ export function createQuestionTool(): Tool {
 
       if (!questions || questions.length === 0) {
         return {
-          toolCallId: "",
+          
           content: "questions parameter must be a non-empty array",
           isError: true,
         };
@@ -52,7 +52,7 @@ export function createQuestionTool(): Tool {
 
       if (!ctx.askUserQuestions) {
         return {
-          toolCallId: "",
+          
           content: "User interaction is not available in this context",
           isError: true,
         };
@@ -63,7 +63,7 @@ export function createQuestionTool(): Tool {
       const lines = Object.entries(answers).map(([question, answer]) => `${question} = ${answer}`);
 
       return {
-        toolCallId: "",
+        
         content: lines.join("\n"),
         isError: false,
         title: `${questions.length} question(s) asked`,

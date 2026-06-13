@@ -113,7 +113,7 @@ export function createSubagentTool(deps: SubagentDeps): Tool {
           }
           if (event.type === "error") {
             return {
-              toolCallId: "",
+              
               content: `Sub-agent error: ${event.text ?? "unknown error"}`,
               isError: true,
             };
@@ -121,7 +121,7 @@ export function createSubagentTool(deps: SubagentDeps): Tool {
         }
 
         return {
-          toolCallId: "",
+          
           content: finalText || "Sub-agent completed with no output.",
           isError: false,
           metadata: {
@@ -131,7 +131,7 @@ export function createSubagentTool(deps: SubagentDeps): Tool {
         };
       } catch (error) {
         return {
-          toolCallId: "",
+          
           content: `Sub-agent failed: ${error instanceof Error ? error.message : String(error)}`,
           isError: true,
         };

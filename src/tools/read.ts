@@ -70,7 +70,7 @@ export function createReadTool(): Tool {
         return await readFile(filePath, offset, limit);
       } catch {
         return {
-          toolCallId: "",
+          
           content: `File not found: ${filePath}`,
           isError: true,
         };
@@ -84,7 +84,7 @@ async function readFile(filePath: string, offset: number, limit: number): Promis
 
   if (isBinary(buffer)) {
     return {
-      toolCallId: "",
+      
       content: `Binary file detected: ${filePath} (${buffer.length} bytes)`,
       isError: true,
     };
@@ -106,7 +106,7 @@ async function readFile(filePath: string, offset: number, limit: number): Promis
       : `Read ${filePath}`;
 
   return {
-    toolCallId: "",
+    
     content,
     isError: false,
     title,
@@ -129,7 +129,7 @@ async function readDirectory(dirPath: string): Promise<ToolResult> {
   const content = `Directory: ${dirPath} (${entries.length} entries)\n${lines.join("\n")}`;
 
   return {
-    toolCallId: "",
+    
     content,
     isError: false,
     title: `List ${dirPath}`,

@@ -19,9 +19,9 @@ export function createAgentFSTools(agentfs: AgentFS): Tool[] {
         const { path } = input as { path: string };
         try {
           const content = agentfs.fs.readFile(path, "utf-8") as string;
-          return { toolCallId: "", content, isError: false };
+          return { content, isError: false };
         } catch (err) {
-          return { toolCallId: "", content: String(err), isError: true };
+          return { content: String(err), isError: true };
         }
       },
     },
@@ -44,12 +44,12 @@ export function createAgentFSTools(agentfs: AgentFS): Tool[] {
         try {
           agentfs.fs.writeFile(path, content);
           return {
-            toolCallId: "",
+            
             content: `Wrote ${content.length} bytes to ${path}`,
             isError: false,
           };
         } catch (err) {
-          return { toolCallId: "", content: String(err), isError: true };
+          return { content: String(err), isError: true };
         }
       },
     },
@@ -76,9 +76,9 @@ export function createAgentFSTools(agentfs: AgentFS): Tool[] {
             return `  ${entry.name}${suffix}`;
           });
           const content = `Directory: ${path} (${entries.length} entries)\n${lines.join("\n")}`;
-          return { toolCallId: "", content, isError: false };
+          return { content, isError: false };
         } catch (err) {
-          return { toolCallId: "", content: String(err), isError: true };
+          return { content: String(err), isError: true };
         }
       },
     },
@@ -110,9 +110,9 @@ export function createAgentFSTools(agentfs: AgentFS): Tool[] {
             `  Accessed: ${new Date(stat.atime).toISOString()}`,
           ];
           const content = `Stat: ${path}\n${lines.join("\n")}`;
-          return { toolCallId: "", content, isError: false };
+          return { content, isError: false };
         } catch (err) {
-          return { toolCallId: "", content: String(err), isError: true };
+          return { content: String(err), isError: true };
         }
       },
     },
@@ -134,12 +134,12 @@ export function createAgentFSTools(agentfs: AgentFS): Tool[] {
         try {
           const value = agentfs.kv.get(key);
           if (value === undefined) {
-            return { toolCallId: "", content: `Key not found: ${key}`, isError: true };
+            return { content: `Key not found: ${key}`, isError: true };
           }
           const content = JSON.stringify(value, null, 2);
-          return { toolCallId: "", content, isError: false };
+          return { content, isError: false };
         } catch (err) {
-          return { toolCallId: "", content: String(err), isError: true };
+          return { content: String(err), isError: true };
         }
       },
     },
@@ -161,9 +161,9 @@ export function createAgentFSTools(agentfs: AgentFS): Tool[] {
         const { key, value } = input as { key: string; value: string };
         try {
           agentfs.kv.set(key, value);
-          return { toolCallId: "", content: `Set ${key} = ${value}`, isError: false };
+          return { content: `Set ${key} = ${value}`, isError: false };
         } catch (err) {
-          return { toolCallId: "", content: String(err), isError: true };
+          return { content: String(err), isError: true };
         }
       },
     },
@@ -185,9 +185,9 @@ export function createAgentFSTools(agentfs: AgentFS): Tool[] {
         try {
           const keys = agentfs.kv.list(prefix);
           const content = keys.length > 0 ? keys.join("\n") : "No keys found";
-          return { toolCallId: "", content, isError: false };
+          return { content, isError: false };
         } catch (err) {
-          return { toolCallId: "", content: String(err), isError: true };
+          return { content: String(err), isError: true };
         }
       },
     },
