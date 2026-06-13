@@ -7,3 +7,8 @@ coverage/
 .worktrees/
 .claude/
 .agent/
+
+node_modules/
+docs/
+dist/
+test/

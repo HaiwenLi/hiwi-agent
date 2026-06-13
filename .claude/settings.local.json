@@ -93,7 +93,10 @@
       "Bash(xargs grep -A5 -B5 \"complete.*function\\\\|complete.*command\")",
       "Bash(rtk pnpm *)",
       "Bash(rtk proxy *)",
-      "Bash(rtk npx *)"
+      "Bash(rtk npx *)",
+      "Bash(xxd \"C:\\\\Users\\\\weaso\\\\Desktop\\\\workspace\\\\agent-design\\\\src\\\\tui\\\\utils.ts\")",
+      "Bash(D:/Python312/python.exe -c ' *)",
+      "Bash(RTK_DISABLED=1 npx vitest run)"
     ]
   }
 }
