@@ -12,4 +12,7 @@ node_modules/
 docs/
 dist/
 test/
+tests/
 test*.json
+_fix*
+fix-*
