@@ -56,6 +56,7 @@ class ChatComponent implements Component {
 	wantsKeyRelease = false;
 	private lines: OutputLine[] = [];
 	private input = "";
+	private cursorPos = 0;
 	private processing = false;
 	private streamingText = "";
 	private thinkingBuffer = "";
@@ -165,12 +166,19 @@ class ChatComponent implements Component {
 			result.push(...this.renderPopup(width));
 		}
 
-		// Input line
+		// Input line — render with cursor at cursorPos using reverse-video char
 		const prompt = this.awaitingInput ? `\x1b[33m${this.promptLabel}\x1b[0m` : "\x1b[34m> \x1b[0m";
 		const promptWidth = visibleWidth(prompt.replace(/\x1b\[[0-9;]*m/g, ""));
 		const inputWidth = width - promptWidth;
-		const displayInput = truncateToWidth(this.input, inputWidth);
-		result.push(`${prompt}${displayInput}\x1b[37m█\x1b[0m`);
+		const before = this.input.slice(0, this.cursorPos);
+		const after = this.input.slice(this.cursorPos);
+		const charAtCursor = after[0] ?? " ";
+		const cursorChar = charAtCursor === "\t" ? " " : charAtCursor;
+		const beforeDisplay = truncateToWidth(before, inputWidth - 1);
+		const consumed = visibleWidth(beforeDisplay);
+		const afterWidth = inputWidth - consumed - 1;
+		const afterDisplay = afterWidth > 0 ? truncateToWidth(after, afterWidth) : "";
+		result.push(`${prompt}${beforeDisplay}\x1b[7m${cursorChar}\x1b[0m${afterDisplay.slice(1)}`);
 
 		// Bottom separator
 		result.push(separator);
@@ -276,6 +284,20 @@ class ChatComponent implements Component {
   handleInput(data: string): void {
     if (isKeyRelease(data)) return;
 
+    // Bracketed paste: [200~...content...[201~
+    if (data.startsWith("[200~")) {
+      const content = data.slice("[200~".length, data.endsWith("[201~") ? -"[201~".length : undefined);
+      // Strip ANSI escapes and control chars from pasted content
+      const clean = content.replace(/[[0-9;]*m/g, "").replace(/[ --]/g, "");
+      if (clean) {
+        this.input = this.input.slice(0, this.cursorPos) + clean + this.input.slice(this.cursorPos);
+        this.cursorPos += clean.length;
+        this.updatePopupState();
+        this.requestRender();
+      }
+      return;
+    }
+
     // Picker mode takes priority over all other input
     if (this.pickerVisible) {
       if (matchesKey(data, Key.up)) {
@@ -302,6 +324,7 @@ class ChatComponent implements Component {
           this.pickerVisible = false;
           this.pickerItems = [];
           this.input = "";
+          this.cursorPos = 0;
           this.requestRender();
           this.submitPickerItem(item);
         }
@@ -311,6 +334,7 @@ class ChatComponent implements Component {
         this.pickerVisible = false;
         this.pickerItems = [];
         this.input = "";
+        this.cursorPos = 0;
         this.requestRender();
         return;
       }
@@ -318,10 +342,12 @@ class ChatComponent implements Component {
       const printable = decodePrintableKey(data) ?? this.decodeRawPrintable(data);
       if (printable) {
         this.input += printable;
+        this.cursorPos = this.input.length;
         this.updatePickerFilter();
         this.requestRender();
       } else if (matchesKey(data, Key.backspace)) {
         this.input = this.input.slice(0, -1);
+        this.cursorPos = this.input.length;
         this.updatePickerFilter();
         this.requestRender();
       }
@@ -337,90 +363,129 @@ class ChatComponent implements Component {
 
     // Popup navigation
     if (this.popupVisible) {
-			if (matchesKey(data, Key.up)) {
-				this.popupIndex = Math.max(0, this.popupIndex - 1);
-				this.popupScrollOffset = Math.min(this.popupScrollOffset, this.popupIndex);
-				this.requestRender();
-				return;
-			}
-			if (matchesKey(data, Key.down)) {
-				const filtered = this.getFilteredCommands();
-				this.popupIndex = Math.min(filtered.length - 1, this.popupIndex + 1);
-				this.popupScrollOffset = Math.max(this.popupScrollOffset, this.popupIndex - POPOUP_MAX_VISIBLE + 1);
-				this.requestRender();
-				return;
-			}
-			if (matchesKey(data, Key.tab) || matchesKey(data, Key.enter)) {
-				const filtered = this.getFilteredCommands();
-				const cmd = filtered[this.popupIndex];
-				if (cmd) {
-					this.input = `/${cmd.name} `;
-				}
-				this.popupVisible = false;
-				this.requestRender();
-				if (matchesKey(data, Key.enter)) {
-					// Immediately submit
-					this.submitInput();
-				}
-				return;
-			}
-			if (matchesKey(data, Key.escape)) {
-				this.popupVisible = false;
-				this.requestRender();
-				return;
-			}
-			// Fall through: printable chars modify input and update popup
-		}
+      if (matchesKey(data, Key.up)) {
+        this.popupIndex = Math.max(0, this.popupIndex - 1);
+        this.popupScrollOffset = Math.min(this.popupScrollOffset, this.popupIndex);
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, Key.down)) {
+        const filtered = this.getFilteredCommands();
+        this.popupIndex = Math.min(filtered.length - 1, this.popupIndex + 1);
+        this.popupScrollOffset = Math.max(this.popupScrollOffset, this.popupIndex - POPOUP_MAX_VISIBLE + 1);
+        this.requestRender();
+        return;
+      }
+      if (matchesKey(data, Key.tab) || matchesKey(data, Key.enter)) {
+        const filtered = this.getFilteredCommands();
+        const cmd = filtered[this.popupIndex];
+        if (cmd) {
+          this.input = "/" + cmd.name + " ";
+          this.cursorPos = this.input.length;
+        }
+        this.popupVisible = false;
+        this.requestRender();
+        if (matchesKey(data, Key.enter)) {
+          this.submitInput();
+        }
+        return;
+      }
+      if (matchesKey(data, Key.escape)) {
+        this.popupVisible = false;
+        this.requestRender();
+        return;
+      }
+      // Fall through: printable chars modify input and update popup
+    }
 
-		if (!this.popupVisible && matchesKey(data, Key.ctrl("o"))) {
-			let handled = false;
-			// Expand most recent folded assistant output first
-			for (let i = this.lines.length - 1; i >= 0; i--) {
-				const line = this.lines[i];
-				if (line.role === "assistant" && !this.showFullOutputs.has(line.id)) {
-					const md = new Markdown(line.text, 0, 0, this.mdTheme);
-					// Estimate: if text has many lines, it qualifies for folding
-					const hardLineCount = line.text.split("\n").length;
-				if (hardLineCount > OUTPUT_FOLD_LINES / 3) {
-					this.showFullOutputs.add(line.id);
-						handled = true;
-						break;
-					}
-				}
-			}
-			if (!handled) {
-				this.showThinking = !this.showThinking;
-			}
-			this.requestRender();
-			return;
-		}
+    if (!this.popupVisible && matchesKey(data, Key.ctrl("o"))) {
+      let handled = false;
+      for (let i = this.lines.length - 1; i >= 0; i--) {
+        const line = this.lines[i];
+        if (line.role === "assistant" && !this.showFullOutputs.has(line.id)) {
+          const md = new Markdown(line.text, 0, 0, this.mdTheme);
+          const hardLineCount = line.text.split("\n").length;
+          if (hardLineCount > OUTPUT_FOLD_LINES / 3) {
+            this.showFullOutputs.add(line.id);
+            handled = true;
+            break;
+          }
+        }
+      }
+      if (!handled) {
+        this.showThinking = !this.showThinking;
+      }
+      this.requestRender();
+      return;
+    }
 
-		if (matchesKey(data, Key.enter)) {
-			this.submitInput();
-			return;
-		}
+    if (matchesKey(data, Key.enter)) {
+      this.submitInput();
+      return;
+    }
 
-		if (matchesKey(data, Key.ctrl("c"))) {
-			this.loader?.stop();
-			if (this.tui) this.tui.stop();
-			this.exitResolve?.();
-			process.exit(0);
-		}
+    if (matchesKey(data, Key.ctrl("c"))) {
+      this.loader?.stop();
+      if (this.tui) this.tui.stop();
+      this.exitResolve?.();
+      process.exit(0);
+    }
 
-		if (matchesKey(data, Key.backspace)) {
-			this.input = this.input.slice(0, -1);
-			this.updatePopupState();
-			this.requestRender();
-			return;
-		}
+    // Cursor movement: left/right arrows, Home/End
+    if (matchesKey(data, Key.left)) {
+      if (this.cursorPos > 0) {
+        this.cursorPos--;
+        this.requestRender();
+      }
+      return;
+    }
+    if (matchesKey(data, Key.right)) {
+      if (this.cursorPos < this.input.length) {
+        this.cursorPos++;
+        this.requestRender();
+      }
+      return;
+    }
+    if (matchesKey(data, Key.home)) {
+      this.cursorPos = 0;
+      this.requestRender();
+      return;
+    }
+    if (matchesKey(data, Key.end)) {
+      this.cursorPos = this.input.length;
+      this.requestRender();
+      return;
+    }
 
-		const printable = decodePrintableKey(data) ?? this.decodeRawPrintable(data);
-		if (printable) {
-			this.input += printable;
-			this.updatePopupState();
-			this.requestRender();
-		}
-	}
+    // Delete key — remove character at cursor
+    if (matchesKey(data, Key.delete)) {
+      if (this.cursorPos < this.input.length) {
+        this.input = this.input.slice(0, this.cursorPos) + this.input.slice(this.cursorPos + 1);
+        this.updatePopupState();
+        this.requestRender();
+      }
+      return;
+    }
+
+    if (matchesKey(data, Key.backspace)) {
+      if (this.cursorPos > 0) {
+        this.input = this.input.slice(0, this.cursorPos - 1) + this.input.slice(this.cursorPos);
+        this.cursorPos--;
+        this.updatePopupState();
+        this.requestRender();
+      }
+      return;
+    }
+
+    const printable = decodePrintableKey(data) ?? this.decodeRawPrintable(data);
+    if (printable) {
+      this.input = this.input.slice(0, this.cursorPos) + printable + this.input.slice(this.cursorPos);
+      this.cursorPos++;
+      this.updatePopupState();
+      this.requestRender();
+    }
+  }
+
 
   private submitInput(): void {
     const text = this.input;
@@ -429,6 +494,7 @@ class ChatComponent implements Component {
     // even for empty input (user pressing Enter to cancel)
     if (this.awaitingInput && this.pendingInputResolve) {
       this.input = "";
+      this.cursorPos = 0;
       this.awaitingInput = false;
       this.promptLabel = "";
       const resolve = this.pendingInputResolve;
@@ -443,6 +509,7 @@ class ChatComponent implements Component {
     this.popupVisible = false;
     this.pushLine(text, "user");
     this.input = "";
+    this.cursorPos = 0;
     this.processing = true;
     this.loader?.start();
     this.requestRender();
@@ -530,6 +597,7 @@ class ChatComponent implements Component {
 			this.promptLabel = label;
 			this.pendingInputResolve = resolve;
 			this.input = "";
+			this.cursorPos = 0;
 			this.requestRender();
 		});
 	}
@@ -542,6 +610,7 @@ class ChatComponent implements Component {
 		this.pickerScrollOffset = 0;
 		this.pickerVisible = items.length > 0;
 		this.input = "";
+		this.cursorPos = 0;
 		this.requestRender();
 	}
 

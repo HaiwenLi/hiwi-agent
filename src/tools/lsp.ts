@@ -69,6 +69,17 @@ async function getOrCreateClient(root: string, filePath: string): Promise<LspCli
     initialized: false,
   };
 
+  // Handle spawn errors (e.g. ENOENT when LSP server is not installed)
+  // Reject all pending requests so callers get a clean error instead of a crash.
+  child.on("error", (err: Error) => {
+    for (const [id, pending] of client.pending) {
+      clearTimeout(pending.timer);
+      pending.reject(err);
+    }
+    client.pending.clear();
+    clientCache.delete(key);
+  });
+
   // Read responses from stdout
   child.stdout?.on("data", (data: Buffer) => {
     client.buffer += data.toString();

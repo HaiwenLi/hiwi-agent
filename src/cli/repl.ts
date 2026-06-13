@@ -353,7 +353,21 @@ export class REPL {
     const currentAdapter = this.deps.providerRegistry.getActiveAdapter();
     const statusData = this.getStatusBarData();
 
-    // Fallback: estimate tokens if none were counted (some APIs don't return usage in streaming)
+    // Fallback: try adapter.getUsage() first, then estimate
+    if (this.cumulativeInputTokens === 0 || this.cumulativeOutputTokens === 0) {
+      const adapterUsage = currentAdapter.getUsage?.();
+      if (adapterUsage) {
+        if (this.cumulativeInputTokens === 0 && (adapterUsage.inputTokens ?? 0) > 0) {
+          this.cumulativeInputTokens = adapterUsage.inputTokens;
+          statusData.inputTokens = this.cumulativeInputTokens;
+        }
+        if (this.cumulativeOutputTokens === 0 && (adapterUsage.outputTokens ?? 0) > 0) {
+          this.cumulativeOutputTokens = adapterUsage.outputTokens;
+          statusData.outputTokens = this.cumulativeOutputTokens;
+        }
+      }
+    }
+    // Final fallback: estimate from message size if still zero
     if (this.cumulativeInputTokens === 0 && this.messages.length > 0) {
       this.cumulativeInputTokens = Math.max(1, Math.ceil(JSON.stringify(this.messages).length / 4));
       statusData.inputTokens = this.cumulativeInputTokens;

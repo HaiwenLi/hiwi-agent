@@ -122,12 +122,16 @@ export function buildNormalizedUsage(provider: string, raw: RawUsage): TokenUsag
       raw.prompt_cache_hit_tokens ??
       raw.cached_tokens;
 
+    // Cache write: tokens written to cache for the first time.
+    // NOTE: prompt_cache_miss_tokens is NOT cache write \u2014 it\u2019s the non-cached
+    // portion of the prompt.  Mapping it to cacheWriteTokens would cause
+    // inputTokens = promptTokens - cacheRead - cacheMiss = 0.
     cacheWriteTokens =
-      raw.prompt_tokens_details?.cache_write_tokens ??
-      raw.prompt_cache_miss_tokens;
+      raw.prompt_tokens_details?.cache_write_tokens;
 
-    const cacheTotal = (cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0);
-    inputTokens = Math.max(0, promptTokens - cacheTotal);
+    // Only subtract cache-read tokens; they are a subset of promptTokens.
+    // inputTokens = the portion of the prompt that was NOT cached.
+    inputTokens = Math.max(0, promptTokens - (cacheReadTokens ?? 0));
   }
 
   const totalTokens =
